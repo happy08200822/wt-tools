@@ -29,6 +29,38 @@ const TOOLS = [
     gradient: "from-green-400 to-emerald-600",
     liffUrl: LINE_CARD_LIFF_URL,
   },
+  {
+    href: "/counter",
+    emoji: "🔢",
+    tag: "API 練習",
+    title: "按鈕計數器",
+    desc: "每按一次按鈕就呼叫 /api/hello，累加並顯示目前次數，示範前後端串接。",
+    gradient: "from-amber-400 to-rose-600",
+  },
+  {
+    href: "/mbti",
+    emoji: "🧠",
+    tag: "AI 分析",
+    title: "AI MBTI 分析",
+    desc: "描述自己的個性，後端呼叫 Gemini API 分析，回傳最符合的 MBTI 類型與特質。",
+    gradient: "from-fuchsia-400 to-indigo-600",
+  },
+  {
+    href: "/gift",
+    emoji: "🎁",
+    tag: "AI 分析",
+    title: "AI 禮物推薦",
+    desc: "選擇年齡層、地區、興趣、預算、場合，後端呼叫 Gemini API 推薦合適的禮物。",
+    gradient: "from-rose-400 to-red-600",
+  },
+  {
+    href: "/richmenu",
+    emoji: "🖼️",
+    tag: "AI 生圖",
+    title: "LINE 圖文選單生成器",
+    desc: "自訂六宮格文字，呼叫 Gemini 文生圖，一鍵生成官方帳號圖文選單底圖。",
+    gradient: "from-lime-400 to-teal-600",
+  },
 ];
 
 export default function Home() {
