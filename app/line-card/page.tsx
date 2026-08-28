@@ -16,7 +16,7 @@ declare global {
   }
 }
 
-const LIFF_ID = '2005817629-5OfjSdY5';
+const LIFF_ID = '2005817629-5BePAHi6';
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 type StatusType = 'error' | 'warning';
