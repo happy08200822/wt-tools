@@ -61,6 +61,14 @@ const TOOLS = [
     desc: "自訂六宮格文字，呼叫 Gemini 文生圖，一鍵生成官方帳號圖文選單底圖。",
     gradient: "from-lime-400 to-teal-600",
   },
+  {
+    href: "/qrcode",
+    emoji: "📱",
+    tag: "工具",
+    title: "QR Code 產生器",
+    desc: "輸入網址，一鍵生成 QR Code 並可下載成 PNG 圖片。",
+    gradient: "from-slate-400 to-slate-700",
+  },
 ];
 
 export default function Home() {
