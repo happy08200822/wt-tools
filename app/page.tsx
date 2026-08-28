@@ -1,4 +1,7 @@
 import Link from "next/link";
+import CopyLinkButton from "./components/CopyLinkButton";
+
+const LINE_CARD_LIFF_URL = "https://liff.line.me/2005817629-5BePAHi6";
 
 const TOOLS = [
   {
@@ -24,6 +27,7 @@ const TOOLS = [
     title: "LINE 卡片發送器",
     desc: "透過 LIFF 一鍵發送約展成功卡片給好友或群組，自動帶入展示時間與業務名稱。",
     gradient: "from-green-400 to-emerald-600",
+    liffUrl: LINE_CARD_LIFF_URL,
   },
 ];
 
@@ -76,36 +80,49 @@ export default function Home() {
         <section id="tools" className="relative mx-auto max-w-5xl px-6 pb-24">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {TOOLS.map((tool) => (
-              <Link
+              <div
                 key={tool.href}
-                href={tool.href}
                 className="group flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white/80 backdrop-blur p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200"
               >
-                <div className="flex items-center justify-between">
-                  <div
-                    className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${tool.gradient} text-2xl shadow-md`}
-                  >
-                    {tool.emoji}
+                <Link href={tool.href} className="flex flex-1 flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <div
+                      className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${tool.gradient} text-2xl shadow-md`}
+                    >
+                      {tool.emoji}
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-500">
+                      {tool.tag}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-500">
-                    {tool.tag}
-                  </span>
-                </div>
 
-                <div className="flex-1">
-                  <h2 className="text-lg font-bold text-slate-900">{tool.title}</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                    {tool.desc}
-                  </p>
-                </div>
+                  <div className="flex-1">
+                    <h2 className="text-lg font-bold text-slate-900">{tool.title}</h2>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                      {tool.desc}
+                    </p>
+                  </div>
 
-                <div className="flex items-center gap-1 text-sm font-semibold text-indigo-600">
-                  前往使用
-                  <span className="transition-transform duration-200 group-hover:translate-x-1">
-                    →
-                  </span>
-                </div>
-              </Link>
+                  <div className="flex items-center gap-1 text-sm font-semibold text-indigo-600">
+                    前往使用
+                    <span className="transition-transform duration-200 group-hover:translate-x-1">
+                      →
+                    </span>
+                  </div>
+                </Link>
+
+                {tool.liffUrl && (
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
+                    <a
+                      href={tool.liffUrl}
+                      className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 truncate"
+                    >
+                      在 LINE 開啟 →
+                    </a>
+                    <CopyLinkButton url={tool.liffUrl} />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </section>
