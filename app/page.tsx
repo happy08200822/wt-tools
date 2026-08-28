@@ -163,7 +163,12 @@ export default function Home() {
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-5xl px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
           <span>© {new Date().getFullYear()} WT 的小工具箱</span>
-          <span>Built with Next.js</span>
+          <div className="flex items-center gap-4">
+            <Link href="/richmenu/admin" className="hover:text-slate-600 transition-colors">
+              管理後台
+            </Link>
+            <span>Built with Next.js</span>
+          </div>
         </div>
       </footer>
     </div>
