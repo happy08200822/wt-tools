@@ -64,6 +64,7 @@ export default function LineCardPage() {
   const [savingBusy, setSavingBusy] = useState(false);
 
   const [customerName, setCustomerName] = useState('');
+  const [previewing, setPreviewing] = useState(false);
 
   useEffect(() => {
     fetch('/api/line-card-templates')
@@ -168,6 +169,35 @@ export default function LineCardPage() {
       if (oldIndex < 0 || newIndex < 0) return prev;
       return arrayMove(prev, oldIndex, newIndex);
     });
+  }
+
+  async function handlePreviewQuote() {
+    setStatus(null);
+    if (!customerName.trim()) {
+      setStatus({ text: '請先填寫「客戶名稱」再預覽', type: 'error' });
+      return;
+    }
+    const plans = collectPlans(blocks);
+    if (plans.length === 0) {
+      setStatus({ text: '沒有報價方案內容可以預覽，請先新增「方案清單」區塊', type: 'error' });
+      return;
+    }
+
+    setPreviewing(true);
+    try {
+      const res = await fetch('/api/quote-leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerName: customerName.trim(), accentColor, plans }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '建立預覽連結失敗');
+      window.open(`${window.location.origin}/q/${data._id}`, '_blank');
+    } catch (err) {
+      setStatus({ text: err instanceof Error ? err.message : '建立預覽連結失敗', type: 'error' });
+    } finally {
+      setPreviewing(false);
+    }
   }
 
   async function handleSend() {
@@ -404,6 +434,13 @@ export default function LineCardPage() {
                   placeholder="例如：王老闆"
                   className="w-full mt-1.5 text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
                 />
+                <button
+                  onClick={handlePreviewQuote}
+                  disabled={previewing}
+                  className="w-full mt-2 text-xs font-semibold px-3 py-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                >
+                  {previewing ? '建立中...' : '👀 先預覽報價頁（開新分頁，不會發送卡片）'}
+                </button>
               </section>
             )}
 

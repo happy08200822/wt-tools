@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 type Visit = { _id: string; visitedAt: string; durationSec: number };
-type Lead = { _id: string; customerName: string; plans: { title: string }[]; visits: Visit[]; createdAt: string };
+type InterestClick = { clickedAt: string };
+type Lead = {
+  _id: string;
+  customerName: string;
+  plans: { title: string }[];
+  visits: Visit[];
+  interestClicks?: InterestClick[];
+  createdAt: string;
+};
 
 function formatDuration(sec: number) {
   if (sec < 60) return `${sec} 秒`;
@@ -43,17 +51,28 @@ export default function QuoteLeadsPage() {
 
         {leads.map((lead) => {
           const visitCount = lead.visits.length;
+          const interestCount = lead.interestClicks?.length ?? 0;
           const lastVisit = visitCount > 0 ? lead.visits[visitCount - 1] : null;
           const isOpen = expanded === lead._id;
 
           return (
-            <div key={lead._id} className="bg-white rounded-2xl shadow p-4">
+            <div
+              key={lead._id}
+              className={`bg-white rounded-2xl shadow p-4 ${interestCount > 0 ? 'ring-2 ring-rose-400' : ''}`}
+            >
               <button
                 onClick={() => setExpanded(isOpen ? null : lead._id)}
                 className="w-full flex items-center justify-between gap-3 text-left"
               >
                 <div className="min-w-0">
-                  <p className="font-bold text-gray-800">{lead.customerName}</p>
+                  <p className="font-bold text-gray-800">
+                    {lead.customerName}
+                    {interestCount > 0 && (
+                      <span className="ml-2 text-[10px] font-bold text-white bg-rose-500 px-2 py-0.5 rounded-full align-middle">
+                        🔥 有意願
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {lead.plans.map((p) => p.title).join('、') || '（無方案）'}
                   </p>
