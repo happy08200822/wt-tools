@@ -456,6 +456,7 @@ function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {
               {
                 type: 'box',
                 layout: 'horizontal',
+                alignItems: 'center',
                 contents: [
                   { type: 'text', text: p.title, weight: 'bold', size: 'md', color: '#111111', flex: 1, wrap: true },
                   ...(p.badge.trim()
@@ -463,13 +464,21 @@ function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {
                         {
                           type: 'box',
                           layout: 'vertical',
+                          flex: 0,
                           backgroundColor: accentColor,
                           cornerRadius: '999px',
                           paddingAll: '4px',
                           paddingStart: '10px',
                           paddingEnd: '10px',
                           contents: [
-                            { type: 'text', text: p.badge, size: 'xxs', color: '#FFFFFF', weight: 'bold' },
+                            {
+                              type: 'text',
+                              text: p.badge,
+                              size: 'xxs',
+                              color: '#FFFFFF',
+                              weight: 'bold',
+                              align: 'center',
+                            },
                           ],
                         },
                       ]
