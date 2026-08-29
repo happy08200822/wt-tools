@@ -6,7 +6,8 @@ export type TextBlock = { id: string; type: 'text'; text: string };
 export type InfoRowsBlock = { id: string; type: 'infoRows'; rows: { label: string; value: string }[] };
 export type ItemListBlock = { id: string; type: 'itemList'; items: { name: string; price: string }[] };
 export type Plan = { title: string; badge: string; price: string; details: string[]; highlight: boolean };
-export type PlanListBlock = { id: string; type: 'planList'; plans: Plan[] };
+// hidden：卡片本身跟預覽都不會顯示，只用來提供內容給「專屬報價追蹤連結」按鈕使用
+export type PlanListBlock = { id: string; type: 'planList'; plans: Plan[]; hidden: boolean };
 export type SlotListBlock = { id: string; type: 'slotList'; slots: string[] };
 // LINE 的 shareTargetPicker 送 Flex Message 時，按鈕動作只支援 uri（開連結），
 // 放其他動作類型（例如 message）會導致整張卡片送出後「看起來成功、實際沒送到」且不報錯
@@ -49,6 +50,20 @@ export const BLOCK_TYPE_LABEL: Record<Block['type'], string> = {
   pageBreak: '分頁符',
 };
 
+// 每種區塊類型的識別色，用在區塊卡片左側色條，方便在一長串區塊裡快速分辨
+export const BLOCK_TYPE_COLOR: Record<Block['type'], string> = {
+  header: '#475569',
+  hero: '#8B5CF6',
+  text: '#3B82F6',
+  infoRows: '#14B8A6',
+  itemList: '#F59E0B',
+  planList: '#10B981',
+  slotList: '#06B6D4',
+  buttons: '#F43F5E',
+  footer: '#94A3B8',
+  pageBreak: '#D946EF',
+};
+
 export const BUTTON_STYLE_LABEL: Record<ButtonStyle, string> = {
   primary: '實心',
   secondary: '淺底',
@@ -89,6 +104,7 @@ export function createBlock(type: Block['type']): Block {
         id,
         type,
         plans: [{ title: '方案名稱', badge: '', price: '$0', details: ['方案內容'], highlight: false }],
+        hidden: false,
       };
     case 'slotList':
       return { id, type, slots: [''] };
@@ -197,6 +213,7 @@ export const TEMPLATES: Template[] = [
             highlight: true,
           },
         ],
+        hidden: false,
       },
       {
         id: newId(),
@@ -508,6 +525,7 @@ function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {
     }
 
     case 'planList': {
+      if (block.hidden) return [];
       const plans = block.plans.filter((p) => p.title.trim());
       if (plans.length === 0) return [];
       return [

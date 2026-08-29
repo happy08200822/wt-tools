@@ -4,8 +4,19 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Script from 'next/script';
 import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   Block,
   BLOCK_TYPE_LABEL,
+  BLOCK_TYPE_COLOR,
   BUTTON_STYLE_LABEL,
   ButtonStyle,
   TEMPLATES,
@@ -142,6 +153,20 @@ export default function LineCardPage() {
       const next = [...prev];
       [next[idx], next[target]] = [next[target], next[idx]];
       return next;
+    });
+  }
+
+  // 手指按住需要移動 5px 才會判定成拖拉，避免點擊輸入框/按鈕時誤觸拖拉
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setBlocks((prev) => {
+      const oldIndex = prev.findIndex((b) => b.id === active.id);
+      const newIndex = prev.findIndex((b) => b.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
     });
   }
 
@@ -333,17 +358,21 @@ export default function LineCardPage() {
                 <p className="text-center text-gray-400 text-sm py-6">還沒有任何區塊，請從下方新增</p>
               )}
 
-              {blocks.map((block, idx) => (
-                <BlockEditor
-                  key={block.id}
-                  block={block}
-                  isFirst={idx === 0}
-                  isLast={idx === blocks.length - 1}
-                  onChange={(updater) => updateBlock(block.id, updater)}
-                  onRemove={() => removeBlock(block.id)}
-                  onMove={(dir) => moveBlock(block.id, dir)}
-                />
-              ))}
+              <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                  {blocks.map((block, idx) => (
+                    <SortableBlockItem
+                      key={block.id}
+                      block={block}
+                      isFirst={idx === 0}
+                      isLast={idx === blocks.length - 1}
+                      onChange={(updater) => updateBlock(block.id, updater)}
+                      onRemove={() => removeBlock(block.id)}
+                      onMove={(dir) => moveBlock(block.id, dir)}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
 
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
                 {(Object.keys(BLOCK_TYPE_LABEL) as Block['type'][]).map((type) => (
@@ -402,14 +431,7 @@ export default function LineCardPage() {
   );
 }
 
-function BlockEditor({
-  block,
-  isFirst,
-  isLast,
-  onChange,
-  onRemove,
-  onMove,
-}: {
+function SortableBlockItem(props: {
   block: Block;
   isFirst: boolean;
   isLast: boolean;
@@ -417,10 +439,60 @@ function BlockEditor({
   onRemove: () => void;
   onMove: (direction: -1 | 1) => void;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.block.id,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   return (
-    <div className="rounded-xl border border-gray-200 p-3">
+    <div ref={setNodeRef} style={style}>
+      <BlockEditor {...props} dragHandleProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
+
+function BlockEditor({
+  block,
+  isFirst,
+  isLast,
+  onChange,
+  onRemove,
+  onMove,
+  dragHandleProps,
+}: {
+  block: Block;
+  isFirst: boolean;
+  isLast: boolean;
+  onChange: (updater: (block: Block) => Block) => void;
+  onRemove: () => void;
+  onMove: (direction: -1 | 1) => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+}) {
+  const isHiddenPlanList = block.type === 'planList' && block.hidden;
+
+  return (
+    <div
+      className="rounded-xl border border-gray-300 shadow-sm bg-white p-3 pl-4"
+      style={{ borderLeft: `4px solid ${BLOCK_TYPE_COLOR[block.type]}` }}
+    >
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-bold text-gray-500">{BLOCK_TYPE_LABEL[block.type]}</p>
+        <div className="flex items-center gap-2">
+          <button
+            {...dragHandleProps}
+            className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none px-1"
+            aria-label="拖拉排序"
+          >
+            ⠿
+          </button>
+          <p className="text-xs font-bold text-gray-500">
+            {BLOCK_TYPE_LABEL[block.type]}
+            {isHiddenPlanList && <span className="ml-1.5 text-gray-300 font-normal">（已隱藏）</span>}
+          </p>
+        </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => onMove(-1)}
@@ -793,6 +865,14 @@ function PlanListEditor({
 }) {
   return (
     <div className="flex flex-col gap-2">
+      <label className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 rounded-lg px-2 py-1.5">
+        <input
+          type="checkbox"
+          checked={block.hidden}
+          onChange={(e) => onChange((b) => (b.type === 'planList' ? { ...b, hidden: e.target.checked } : b))}
+        />
+        在卡片中隱藏（僅用於產生報價追蹤連結，卡片本身不顯示）
+      </label>
       {block.plans.map((plan, i) => (
         <div key={i} className="flex flex-col gap-1.5 rounded-lg border border-gray-100 p-2">
           <div className="flex gap-1.5">
@@ -980,6 +1060,7 @@ function PreviewBlock({ block, accentColor }: { block: Block; accentColor: strin
     }
 
     case 'planList': {
+      if (block.hidden) return null;
       const plans = block.plans.filter((p) => p.title.trim());
       if (plans.length === 0) return null;
       return (
