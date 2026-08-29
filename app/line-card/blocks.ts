@@ -14,6 +14,8 @@ export type ButtonStyle = 'primary' | 'secondary' | 'link';
 export type ButtonAction = { type: 'uri'; label: string; url: string; style: ButtonStyle };
 export type ButtonsBlock = { id: string; type: 'buttons'; buttons: ButtonAction[] };
 export type FooterBlock = { id: string; type: 'footer'; text: string };
+// 內容太長時，插入這個區塊可以把卡片拆成兩張左右滑動的輪播卡片；標題列/落款每頁都會重複顯示，主圖只出現在第一頁
+export type PageBreakBlock = { id: string; type: 'pageBreak' };
 
 export type Block =
   | HeaderBlock
@@ -24,7 +26,8 @@ export type Block =
   | PlanListBlock
   | SlotListBlock
   | ButtonsBlock
-  | FooterBlock;
+  | FooterBlock
+  | PageBreakBlock;
 
 export const BLOCK_TYPE_LABEL: Record<Block['type'], string> = {
   header: '標題列',
@@ -36,6 +39,7 @@ export const BLOCK_TYPE_LABEL: Record<Block['type'], string> = {
   slotList: '時段清單',
   buttons: '按鈕',
   footer: '落款',
+  pageBreak: '分頁符',
 };
 
 export const BUTTON_STYLE_LABEL: Record<ButtonStyle, string> = {
@@ -85,6 +89,8 @@ export function createBlock(type: Block['type']): Block {
       return { id, type, buttons: [{ type: 'uri', label: '按鈕文字', url: 'https://', style: 'primary' }] };
     case 'footer':
       return { id, type, text: '公司/品牌名稱' };
+    case 'pageBreak':
+      return { id, type };
   }
 }
 
@@ -292,20 +298,58 @@ export function validateBlocks(blocks: Block[]): string | null {
   return null;
 }
 
-// --- 把區塊組合轉成 LINE Flex Message bubble JSON ---
+// --- 分頁：用「分頁符」區塊把內容拆成多頁（多個 bubble），標題列/落款每頁重複，主圖只在第一頁 ---
+
+export type PageSplit = {
+  header?: HeaderBlock;
+  hero?: HeroBlock;
+  footer?: FooterBlock;
+  pages: Block[][];
+};
+
+export function splitIntoPages(blocks: Block[]): PageSplit {
+  let header: HeaderBlock | undefined;
+  let hero: HeroBlock | undefined;
+  let footer: FooterBlock | undefined;
+  const pages: Block[][] = [];
+  let current: Block[] = [];
+
+  for (const block of blocks) {
+    if (block.type === 'header') {
+      header = block;
+    } else if (block.type === 'hero') {
+      if (block.imageUrl.trim()) hero = block;
+    } else if (block.type === 'footer') {
+      footer = block;
+    } else if (block.type === 'pageBreak') {
+      pages.push(current);
+      current = [];
+    } else {
+      current.push(block);
+    }
+  }
+  pages.push(current);
+
+  return { header, hero, footer, pages };
+}
+
+// --- 把區塊組合轉成 LINE Flex Message JSON（單頁是 bubble，多頁自動包成 carousel） ---
 
 type FlexContent = Record<string, unknown>;
 
-export function buildFlexBubble(blocks: Block[], accentColor: string): FlexContent {
+function buildBubble(
+  pageBlocks: Block[],
+  accentColor: string,
+  options: { header?: HeaderBlock; hero?: HeroBlock; footer?: FooterBlock }
+): FlexContent {
+  const { header, hero, footer } = options;
   const bodyContents: FlexContent[] = [];
-
-  for (const block of blocks) {
-    if (block.type === 'header' || block.type === 'hero') continue; // 另外處理
+  for (const block of pageBlocks) {
     bodyContents.push(...blockToFlexContents(block, accentColor));
   }
-
-  const header = blocks.find((b): b is HeaderBlock => b.type === 'header');
-  const hero = blocks.find((b): b is HeroBlock => b.type === 'hero' && b.imageUrl.trim() !== '');
+  if (footer) {
+    bodyContents.push(...blockToFlexContents(footer, accentColor));
+  }
 
   return {
     type: 'bubble',
@@ -354,6 +398,17 @@ export function buildFlexBubble(blocks: Block[], accentColor: string): FlexConte
       contents: bodyContents.length > 0 ? bodyContents : [{ type: 'text', text: ' ' }],
     },
   };
+}
+
+export function buildFlexMessage(blocks: Block[], accentColor: string): FlexContent {
+  const { header, hero, footer, pages } = splitIntoPages(blocks);
+
+  const bubbles = pages.map((pageBlocks, i) =>
+    buildBubble(pageBlocks, accentColor, { header, hero: i === 0 ? hero : undefined, footer })
+  );
+
+  if (bubbles.length <= 1) return bubbles[0];
+  return { type: 'carousel', contents: bubbles };
 }
 
 function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {

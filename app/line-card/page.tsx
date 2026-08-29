@@ -9,7 +9,8 @@ import {
   ButtonStyle,
   TEMPLATES,
   createBlock,
-  buildFlexBubble,
+  buildFlexMessage,
+  splitIntoPages,
   validateBlocks,
   lightenColor,
 } from './blocks';
@@ -33,6 +34,8 @@ type StatusMessage = { text: string; type: 'error' | 'warning' } | null;
 
 const ACCENT_COLORS = ['#00C800', '#06B6D4', '#F97316', '#8B5CF6', '#EF4444', '#334155'];
 
+type SavedTemplate = { _id: string; name: string; accentColor: string; blocks: Block[] };
+
 export default function LineCardPage() {
   const [liffLoaded, setLiffLoaded] = useState(false);
   const [liffReady, setLiffReady] = useState(false);
@@ -42,6 +45,54 @@ export default function LineCardPage() {
   const [templateId, setTemplateId] = useState(TEMPLATES[0].id);
   const [accentColor, setAccentColor] = useState(ACCENT_COLORS[0]);
   const [blocks, setBlocks] = useState<Block[]>(() => TEMPLATES[0].blocks());
+
+  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
+  const [savingName, setSavingName] = useState('');
+  const [savingBusy, setSavingBusy] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/line-card-templates')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setSavedTemplates(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  async function handleSaveTemplate() {
+    const name = savingName.trim();
+    if (!name) return;
+    setSavingBusy(true);
+    try {
+      const res = await fetch('/api/line-card-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, accentColor, blocks }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '儲存失敗');
+      setSavedTemplates((prev) => [data, ...prev.filter((t) => t.name !== name)]);
+      setSavingName('');
+    } catch (err) {
+      setStatus({ text: err instanceof Error ? err.message : '儲存失敗', type: 'error' });
+    } finally {
+      setSavingBusy(false);
+    }
+  }
+
+  function applySavedTemplate(t: SavedTemplate) {
+    setTemplateId('');
+    setAccentColor(t.accentColor);
+    setBlocks(t.blocks);
+    setStatus(null);
+  }
+
+  async function handleDeleteSavedTemplate(id: string) {
+    setSavedTemplates((prev) => prev.filter((t) => t._id !== id));
+    try {
+      await fetch(`/api/line-card-templates/${id}`, { method: 'DELETE' });
+    } catch {
+      // ignore，畫面已經移除，下次重新整理若刪除失敗會再出現
+    }
+  }
 
   useEffect(() => {
     if (!liffLoaded) return;
@@ -108,14 +159,14 @@ export default function LineCardPage() {
       return;
     }
 
-    const bubble = buildFlexBubble(blocks, accentColor);
+    const contents = buildFlexMessage(blocks, accentColor);
     const header = blocks.find((b) => b.type === 'header');
     const altText = header && header.type === 'header' ? header.title : '卡片訊息';
 
     setSending(true);
     try {
       const result = await window.liff.shareTargetPicker([
-        { type: 'flex', altText: altText || '卡片訊息', contents: bubble },
+        { type: 'flex', altText: altText || '卡片訊息', contents },
       ]);
       if (result) {
         window.liff.closeWindow();
@@ -180,6 +231,55 @@ export default function LineCardPage() {
                   />
                 ))}
               </div>
+            </section>
+
+            <section className="bg-white rounded-2xl shadow p-5">
+              <p className="text-sm font-bold text-gray-700 mb-3">我的模板</p>
+
+              {savedTemplates.length === 0 && (
+                <p className="text-xs text-gray-400 mb-3">還沒有儲存過模板，編輯好內容後可以存下來下次直接套用</p>
+              )}
+
+              {savedTemplates.length > 0 && (
+                <div className="flex flex-col gap-1.5 mb-3">
+                  {savedTemplates.map((t) => (
+                    <div
+                      key={t._id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2"
+                    >
+                      <button
+                        onClick={() => applySavedTemplate(t)}
+                        className="flex-1 text-left text-sm font-semibold text-gray-700 truncate"
+                      >
+                        {t.name}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSavedTemplate(t._id)}
+                        className="text-xs text-gray-300 hover:text-red-500 shrink-0"
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-1.5">
+                <input
+                  value={savingName}
+                  onChange={(e) => setSavingName(e.target.value)}
+                  placeholder="輸入名稱另存目前卡片"
+                  className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+                />
+                <button
+                  onClick={handleSaveTemplate}
+                  disabled={!savingName.trim() || savingBusy}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-gray-700 disabled:bg-gray-300 text-white font-semibold"
+                >
+                  {savingBusy ? '儲存中...' : '儲存'}
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">同名會覆蓋更新，儲存在你的帳號底下，換裝置也看得到</p>
             </section>
 
             <section className="bg-white rounded-2xl shadow p-5 flex flex-col gap-3">
@@ -541,6 +641,12 @@ function BlockEditor({
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
         />
       )}
+
+      {block.type === 'pageBreak' && (
+        <p className="text-xs text-gray-400 text-center py-1">
+          ✂️ 卡片會從這裡拆成下一頁（標題列/落款每頁都會重複顯示）
+        </p>
+      )}
     </div>
   );
 }
@@ -704,29 +810,47 @@ function PlanListEditor({
 }
 
 function CardPreview({ blocks, accentColor }: { blocks: Block[]; accentColor: string }) {
-  const header = blocks.find((b) => b.type === 'header');
-  const hero = blocks.find((b) => b.type === 'hero' && b.imageUrl.trim());
+  const { header, hero, footer, pages } = splitIntoPages(blocks);
+  const [activePage, setActivePage] = useState(0);
+  const pageIndex = Math.min(activePage, pages.length - 1);
+  const pageBlocks = pages[pageIndex] ?? [];
 
   return (
-    <div className="w-full max-w-[300px] bg-white rounded-2xl shadow-lg overflow-hidden">
-      {hero && hero.type === 'hero' && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={hero.imageUrl} alt="" className="w-full aspect-[20/13] object-cover" />
-      )}
-      {header && header.type === 'header' && (
-        <div
-          className="px-4 py-3 text-center"
-          style={{ background: `linear-gradient(135deg, ${accentColor}, ${lightenColor(accentColor, 0.35)})` }}
-        >
-          <p className="text-white font-bold text-sm break-words">{header.title || ' '}</p>
+    <div className="flex flex-col items-center gap-2 w-full">
+      {pages.length > 1 && (
+        <div className="flex gap-1.5">
+          {pages.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setActivePage(i)}
+              className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                i === pageIndex ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              第 {i + 1} 頁
+            </button>
+          ))}
         </div>
       )}
-      <div className="p-4 flex flex-col gap-3">
-        {blocks
-          .filter((b) => b.type !== 'header' && b.type !== 'hero')
-          .map((block) => (
+      <div className="w-full max-w-[300px] bg-white rounded-2xl shadow-lg overflow-hidden">
+        {pageIndex === 0 && hero && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={hero.imageUrl} alt="" className="w-full aspect-[20/13] object-cover" />
+        )}
+        {header && (
+          <div
+            className="px-4 py-3 text-center"
+            style={{ background: `linear-gradient(135deg, ${accentColor}, ${lightenColor(accentColor, 0.35)})` }}
+          >
+            <p className="text-white font-bold text-sm break-words">{header.title || ' '}</p>
+          </div>
+        )}
+        <div className="p-4 flex flex-col gap-3">
+          {pageBlocks.map((block) => (
             <PreviewBlock key={block.id} block={block} accentColor={accentColor} />
           ))}
+          {footer && <PreviewBlock key={footer.id} block={footer} accentColor={accentColor} />}
+        </div>
       </div>
     </div>
   );
