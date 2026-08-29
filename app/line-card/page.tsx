@@ -8,6 +8,7 @@ import {
   TEMPLATES,
   createBlock,
   buildFlexBubble,
+  validateBlocks,
 } from './blocks';
 
 const LIFF_ID = '2005817629-5BePAHi6';
@@ -98,6 +99,12 @@ export default function LineCardPage() {
       return;
     }
 
+    const validationError = validateBlocks(blocks);
+    if (validationError) {
+      setStatus({ text: validationError, type: 'error' });
+      return;
+    }
+
     const bubble = buildFlexBubble(blocks, accentColor);
     const header = blocks.find((b) => b.type === 'header');
     const altText = header && header.type === 'header' ? header.title : '卡片訊息';
@@ -112,8 +119,9 @@ export default function LineCardPage() {
       } else {
         setStatus({ text: '已取消發送', type: 'warning' });
       }
-    } catch {
-      setStatus({ text: '發送失敗，請稍後再試', type: 'error' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStatus({ text: `發送失敗：${message}`, type: 'error' });
     } finally {
       setSending(false);
     }

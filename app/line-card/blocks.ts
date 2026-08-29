@@ -166,6 +166,26 @@ export const TEMPLATES: Template[] = [
   },
 ];
 
+// LINE 的 uri action 要求是完整可用的網址（http/https/tel/mailto/line://），
+// 光是 "https://" 這種沒有主機名稱的字串會被判定為無效，導致整張卡片發送失敗
+const VALID_URI_PATTERN = /^(https?:\/\/[^\s/]+|tel:\S+|mailto:\S+|line:\/\/\S+)/i;
+
+export function validateBlocks(blocks: Block[]): string | null {
+  for (const block of blocks) {
+    if (block.type !== 'buttons') continue;
+    for (const btn of block.buttons) {
+      if (!btn.label.trim()) continue; // 空按鈕會被自動忽略，不用檔
+      if (btn.type === 'uri' && !VALID_URI_PATTERN.test(btn.url.trim())) {
+        return `按鈕「${btn.label}」的網址不完整或無效：${btn.url || '（空白）'}`;
+      }
+      if (btn.type === 'message' && !btn.text.trim()) {
+        return `按鈕「${btn.label}」還沒填要傳送的文字內容`;
+      }
+    }
+  }
+  return null;
+}
+
 // --- 把區塊組合轉成 LINE Flex Message bubble JSON ---
 
 type FlexContent = Record<string, unknown>;
