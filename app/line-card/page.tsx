@@ -66,6 +66,20 @@ export default function LineCardPage() {
   const [customerName, setCustomerName] = useState('');
   const [previewing, setPreviewing] = useState(false);
 
+  const [quota, setQuota] = useState<{
+    type: string;
+    limit: number | null;
+    used: number;
+    remaining: number | null;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/line-card/quota')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setQuota(data))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch('/api/line-card-templates')
       .then((res) => (res.ok ? res.json() : []))
@@ -291,6 +305,15 @@ export default function LineCardPage() {
               查看報價追蹤紀錄
             </Link>
           </p>
+          {quota && (
+            <p className="text-xs text-gray-400 bg-white/70 rounded-full px-3 py-1 mt-1">
+              {quota.type === 'unlimited'
+                ? '📨 官方帳號推播：無限制'
+                : quota.type === 'limited' && quota.limit !== null
+                  ? `📨 本月官方帳號推播剩餘：${quota.remaining?.toLocaleString()} / ${quota.limit.toLocaleString()}`
+                  : '📨 官方帳號推播用量：無法取得'}
+            </p>
+          )}
         </div>
 
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
