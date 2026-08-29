@@ -1,25 +1,26 @@
-import { getRedis } from './redis';
-
-const USERS_KEY = 'richmenu:users';
-const USAGE_PREFIX = 'richmenu:usage:';
-const LOG_KEY = 'richmenu:log';
-const LOG_MAX = 500;
+import dbConnect from '@/lib/dbConnect';
+import RichmenuUser from '@/models/RichmenuUser';
+import RichmenuLog from '@/models/RichmenuLog';
 
 export async function resolveUser(code: string): Promise<string | null> {
   if (!code) return null;
-  const redis = await getRedis();
-  const name = await redis.hGet(USERS_KEY, code);
-  return name ?? null;
+  await dbConnect();
+  const user = await RichmenuUser.findOne({ code }).select('name');
+  return user?.name ?? null;
 }
 
 export async function addUser(code: string, name: string): Promise<void> {
-  const redis = await getRedis();
-  await redis.hSet(USERS_KEY, code, name);
+  await dbConnect();
+  await RichmenuUser.findOneAndUpdate(
+    { code },
+    { $set: { name }, $setOnInsert: { count: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 } },
+    { upsert: true }
+  );
 }
 
 export async function removeUser(code: string): Promise<void> {
-  const redis = await getRedis();
-  await redis.hDel(USERS_KEY, code);
+  await dbConnect();
+  await RichmenuUser.deleteOne({ code });
 }
 
 export async function recordUsage(
@@ -27,23 +28,26 @@ export async function recordUsage(
   name: string,
   usage: { inputTokens: number; outputTokens: number; costUsd: number }
 ) {
-  const redis = await getRedis();
-  const key = `${USAGE_PREFIX}${code}`;
-  await redis.hIncrBy(key, 'count', 1);
-  await redis.hIncrBy(key, 'inputTokens', usage.inputTokens);
-  await redis.hIncrBy(key, 'outputTokens', usage.outputTokens);
-  await redis.hIncrByFloat(key, 'costUsd', usage.costUsd);
+  await dbConnect();
+  await RichmenuUser.findOneAndUpdate(
+    { code },
+    {
+      $inc: {
+        count: 1,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        costUsd: usage.costUsd,
+      },
+    }
+  );
 
-  const entry = JSON.stringify({
+  await RichmenuLog.create({
     code,
     name,
-    time: new Date().toISOString(),
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
     costUsd: usage.costUsd,
   });
-  await redis.lPush(LOG_KEY, entry);
-  await redis.lTrim(LOG_KEY, 0, LOG_MAX - 1);
 }
 
 export type UserUsage = {
@@ -56,28 +60,29 @@ export type UserUsage = {
 };
 
 export async function getAllUsage(): Promise<UserUsage[]> {
-  const redis = await getRedis();
-  const users = await redis.hGetAll(USERS_KEY);
-  const results = await Promise.all(
-    Object.entries(users).map(async ([code, name]) => {
-      const usage = await redis.hGetAll(`${USAGE_PREFIX}${code}`);
-      return {
-        code,
-        name,
-        count: Number(usage.count || 0),
-        inputTokens: Number(usage.inputTokens || 0),
-        outputTokens: Number(usage.outputTokens || 0),
-        costUsd: Number(usage.costUsd || 0),
-      };
-    })
-  );
-  return results.sort((a, b) => b.costUsd - a.costUsd);
+  await dbConnect();
+  const users = await RichmenuUser.find().sort({ costUsd: -1 });
+  return users.map((u) => ({
+    code: u.code,
+    name: u.name,
+    count: u.count ?? 0,
+    inputTokens: u.inputTokens ?? 0,
+    outputTokens: u.outputTokens ?? 0,
+    costUsd: u.costUsd ?? 0,
+  }));
 }
 
 export async function getRecentLog(limit = 50) {
-  const redis = await getRedis();
-  const raw = await redis.lRange(LOG_KEY, 0, limit - 1);
-  return raw.map((r) => JSON.parse(r));
+  await dbConnect();
+  const logs = await RichmenuLog.find().sort({ createdAt: -1 }).limit(limit);
+  return logs.map((l) => ({
+    code: l.code,
+    name: l.name,
+    time: l.createdAt?.toISOString(),
+    inputTokens: l.inputTokens,
+    outputTokens: l.outputTokens,
+    costUsd: l.costUsd,
+  }));
 }
 
 export function checkAdminPassword(provided: unknown): boolean {

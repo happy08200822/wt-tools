@@ -1,5 +1,7 @@
 import Link from "next/link";
 import CopyLinkButton from "./components/CopyLinkButton";
+import LogoutButton from "./components/LogoutButton";
+import { getCurrentUser } from "@/lib/session";
 
 const LINE_CARD_LIFF_URL = "https://liff.line.me/2005817629-5BePAHi6";
 
@@ -69,9 +71,27 @@ const TOOLS = [
     desc: "輸入網址，一鍵生成 QR Code 並可下載成 PNG 圖片。",
     gradient: "from-slate-400 to-slate-700",
   },
+  {
+    href: "/transactions",
+    emoji: "💰",
+    tag: "資料庫",
+    title: "記帳本",
+    desc: "選擇使用者、記錄收支，串接 MongoDB 的完整 CRUD 示範。",
+    gradient: "from-indigo-400 to-violet-700",
+  },
+  {
+    href: "/board",
+    emoji: "📝",
+    tag: "資料庫",
+    title: "留言板",
+    desc: "選擇身份發表文章，只能刪除自己發表過的內容。",
+    gradient: "from-sky-400 to-blue-700",
+  },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const currentUser = await getCurrentUser();
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/70 backdrop-blur-md">
@@ -91,6 +111,22 @@ export default function Home() {
               </Link>
             ))}
           </nav>
+          <div className="flex items-center gap-3">
+            {currentUser && (
+              <span className="hidden sm:inline text-sm text-slate-500">
+                你好，{currentUser.name}
+              </span>
+            )}
+            {currentUser?.role === "admin" && (
+              <Link
+                href="/admin"
+                className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+              >
+                後台管理
+              </Link>
+            )}
+            <LogoutButton />
+          </div>
         </div>
       </header>
 
