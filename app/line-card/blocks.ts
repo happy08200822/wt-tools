@@ -5,9 +5,9 @@ export type TextBlock = { id: string; type: 'text'; text: string };
 export type InfoRowsBlock = { id: string; type: 'infoRows'; rows: { label: string; value: string }[] };
 export type ItemListBlock = { id: string; type: 'itemList'; items: { name: string; price: string }[] };
 export type SlotListBlock = { id: string; type: 'slotList'; slots: string[] };
-export type ButtonAction =
-  | { type: 'uri'; label: string; url: string }
-  | { type: 'message'; label: string; text: string };
+// LINE 的 shareTargetPicker 送 Flex Message 時，按鈕動作只支援 uri（開連結），
+// 放其他動作類型（例如 message）會導致整張卡片送出後「看起來成功、實際沒送到」且不報錯
+export type ButtonAction = { type: 'uri'; label: string; url: string };
 export type ButtonsBlock = { id: string; type: 'buttons'; buttons: ButtonAction[] };
 export type FooterBlock = { id: string; type: 'footer'; text: string };
 
@@ -153,7 +153,7 @@ export const TEMPLATES: Template[] = [
       {
         id: newId(),
         type: 'buttons',
-        buttons: [{ type: 'message', label: '我要預約', text: '我想預約，方便的時段是：' }],
+        buttons: [{ type: 'uri', label: '回覆預約時段', url: 'https://' }],
       },
       { id: newId(), type: 'footer', text: '' },
     ],
@@ -175,11 +175,8 @@ export function validateBlocks(blocks: Block[]): string | null {
     if (block.type !== 'buttons') continue;
     for (const btn of block.buttons) {
       if (!btn.label.trim()) continue; // 空按鈕會被自動忽略，不用檔
-      if (btn.type === 'uri' && !VALID_URI_PATTERN.test(btn.url.trim())) {
+      if (!VALID_URI_PATTERN.test(btn.url.trim())) {
         return `按鈕「${btn.label}」的網址不完整或無效：${btn.url || '（空白）'}`;
-      }
-      if (btn.type === 'message' && !btn.text.trim()) {
-        return `按鈕「${btn.label}」還沒填要傳送的文字內容`;
       }
     }
   }
@@ -334,9 +331,7 @@ function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {
     }
 
     case 'buttons': {
-      const buttons = block.buttons.filter(
-        (b) => b.label.trim() && (b.type === 'uri' ? b.url.trim() : b.text.trim())
-      );
+      const buttons = block.buttons.filter((b) => b.label.trim() && b.url.trim());
       if (buttons.length === 0) return [];
       return [
         {
@@ -346,10 +341,7 @@ function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {
           margin: 'md',
           contents: buttons.map((b) => ({
             type: 'button',
-            action:
-              b.type === 'uri'
-                ? { type: 'uri', label: b.label, uri: b.url }
-                : { type: 'message', label: b.label, text: b.text },
+            action: { type: 'uri', label: b.label, uri: b.url },
             style: 'primary',
             color: accentColor,
             height: 'sm',

@@ -446,86 +446,45 @@ function BlockEditor({
       )}
 
       {block.type === 'buttons' && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           {block.buttons.map((btn, i) => (
-            <div key={i} className="flex flex-col gap-1 rounded-lg border border-gray-100 p-2">
-              <div className="flex gap-1.5">
-                <select
-                  value={btn.type}
-                  onChange={(e) =>
-                    onChange((b) => {
-                      if (b.type !== 'buttons') return b;
-                      const buttons = [...b.buttons];
-                      const label = buttons[i].label;
-                      buttons[i] =
-                        e.target.value === 'uri'
-                          ? { type: 'uri', label, url: 'https://' }
-                          : { type: 'message', label, text: '' };
-                      return { ...b, buttons };
-                    })
-                  }
-                  className="text-xs border border-gray-200 rounded-lg px-1.5 py-1.5 text-gray-900 bg-white"
-                >
-                  <option value="uri">開連結</option>
-                  <option value="message">傳送文字</option>
-                </select>
-                <input
-                  value={btn.label}
-                  onChange={(e) =>
-                    onChange((b) => {
-                      if (b.type !== 'buttons') return b;
-                      const buttons = [...b.buttons];
-                      buttons[i] = { ...buttons[i], label: e.target.value };
-                      return { ...b, buttons };
-                    })
-                  }
-                  placeholder="按鈕文字"
-                  className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
-                />
-                <button
-                  onClick={() =>
-                    onChange((b) =>
-                      b.type === 'buttons' ? { ...b, buttons: b.buttons.filter((_, j) => j !== i) } : b
-                    )
-                  }
-                  className="text-xs text-gray-300 hover:text-red-500 px-1"
-                >
-                  ✕
-                </button>
-              </div>
-              {btn.type === 'uri' ? (
-                <input
-                  value={btn.url}
-                  onChange={(e) =>
-                    onChange((b) => {
-                      if (b.type !== 'buttons') return b;
-                      const buttons = [...b.buttons];
-                      const target = buttons[i];
-                      if (target.type !== 'uri') return b;
-                      buttons[i] = { ...target, url: e.target.value };
-                      return { ...b, buttons };
-                    })
-                  }
-                  placeholder="https://"
-                  className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
-                />
-              ) : (
-                <input
-                  value={btn.text}
-                  onChange={(e) =>
-                    onChange((b) => {
-                      if (b.type !== 'buttons') return b;
-                      const buttons = [...b.buttons];
-                      const target = buttons[i];
-                      if (target.type !== 'message') return b;
-                      buttons[i] = { ...target, text: e.target.value };
-                      return { ...b, buttons };
-                    })
-                  }
-                  placeholder="按下後要自動送出的文字"
-                  className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
-                />
-              )}
+            <div key={i} className="flex gap-1.5">
+              <input
+                value={btn.label}
+                onChange={(e) =>
+                  onChange((b) => {
+                    if (b.type !== 'buttons') return b;
+                    const buttons = [...b.buttons];
+                    buttons[i] = { ...buttons[i], label: e.target.value };
+                    return { ...b, buttons };
+                  })
+                }
+                placeholder="按鈕文字"
+                className="w-28 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+              />
+              <input
+                value={btn.url}
+                onChange={(e) =>
+                  onChange((b) => {
+                    if (b.type !== 'buttons') return b;
+                    const buttons = [...b.buttons];
+                    buttons[i] = { ...buttons[i], url: e.target.value };
+                    return { ...b, buttons };
+                  })
+                }
+                placeholder="https://"
+                className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+              />
+              <button
+                onClick={() =>
+                  onChange((b) =>
+                    b.type === 'buttons' ? { ...b, buttons: b.buttons.filter((_, j) => j !== i) } : b
+                  )
+                }
+                className="text-xs text-gray-300 hover:text-red-500 px-1"
+              >
+                ✕
+              </button>
             </div>
           ))}
           {block.buttons.length < 2 && (
