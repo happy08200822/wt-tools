@@ -28,8 +28,17 @@ const QuoteLeadSchema = new Schema(
     accentColor: { type: String, required: true },
     plans: [PlanSchema],
     visits: [VisitSchema],
-    // 客戶在追蹤頁按下「我要簽約」CTA 的紀錄，代表比單純瀏覽更強的購買意願
-    interestClicks: [{ clickedAt: { type: Date, default: Date.now } }],
+    // 客戶在追蹤頁按下「我要簽約」並填寫簽約資料表單的紀錄，代表比單純瀏覽更強的購買意願
+    interestClicks: [
+      {
+        clickedAt: { type: Date, default: Date.now },
+        companyName: { type: String, default: '' },
+        contactPerson: { type: String, default: '' },
+        taxId: { type: String, default: '' },
+        phone: { type: String, default: '' },
+        address: { type: String, default: '' },
+      },
+    ],
   },
   { timestamps: true }
 );

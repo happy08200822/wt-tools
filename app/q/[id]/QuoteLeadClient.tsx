@@ -34,11 +34,20 @@ const CONTRACT_STEPS = [
   },
 ];
 
+type ContractForm = { companyName: string; contactPerson: string; taxId: string; phone: string; address: string };
+const EMPTY_FORM: ContractForm = { companyName: '', contactPerson: '', taxId: '', phone: '', address: '' };
+
 export default function QuoteLeadClient({ id }: { id: string }) {
   const [lead, setLead] = useState<LeadData | null>(null);
   const [error, setError] = useState('');
   const visitIdRef = useRef<string | null>(null);
   const startedAtRef = useRef<number>(0);
+
+  const [showForm, setShowForm] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [form, setForm] = useState<ContractForm>(EMPTY_FORM);
 
   useEffect(() => {
     fetch(`/api/quote-leads/${id}`)
@@ -78,8 +87,26 @@ export default function QuoteLeadClient({ id }: { id: string }) {
     };
   }, [id]);
 
-  function handleInterestClick() {
-    fetch(`/api/quote-leads/${id}/interest`, { method: 'POST' }).catch(() => {});
+  async function handleSubmitForm() {
+    if (!form.companyName.trim() || !form.phone.trim()) {
+      setFormError('請至少填寫「乙方」跟「電話」');
+      return;
+    }
+    setFormError('');
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/quote-leads/${id}/interest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error();
+      setSubmitted(true);
+    } catch {
+      setFormError('送出失敗，請稍後再試');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (error) {
@@ -277,17 +304,100 @@ export default function QuoteLeadClient({ id }: { id: string }) {
 
       {/* Sticky CTA */}
       <div className="fixed bottom-0 left-0 right-0 px-5 pb-5 pt-8 bg-gradient-to-t from-[#F5F6F8] via-[#F5F6F8] to-transparent">
-        <a
-          href="https://line.me/ti/p/"
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={handleInterestClick}
-          className="block max-w-md mx-auto text-center text-white font-bold py-3.5 rounded-full shadow-[0_16px_30px_-10px] transition-transform active:scale-[0.98]"
+        <button
+          onClick={() => {
+            setSubmitted(false);
+            setFormError('');
+            setShowForm(true);
+          }}
+          className="block w-full max-w-md mx-auto text-center text-white font-bold py-3.5 rounded-full shadow-[0_16px_30px_-10px] transition-transform active:scale-[0.98]"
           style={{ backgroundColor: accent, boxShadow: `0 16px 30px -10px ${accent}88` }}
         >
           我要簽約，請與我聯繫
-        </a>
+        </button>
       </div>
+
+      {/* 簽約意願表單彈窗 */}
+      {showForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4"
+          onClick={() => setShowForm(false)}
+        >
+          <div
+            className="w-full sm:max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-6 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {submitted ? (
+              <div className="text-center py-6">
+                <p className="text-3xl">✅</p>
+                <p className="text-base font-bold text-gray-900 mt-3">已收到您的資料！</p>
+                <p className="text-sm text-gray-500 mt-1">我們會盡快與您聯繫，謝謝您 🙏</p>
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="mt-5 w-full py-2.5 rounded-full font-bold text-white"
+                  style={{ backgroundColor: accent }}
+                >
+                  關閉
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="text-base font-extrabold text-gray-900">提供以下資料，我先打合約給您過目</p>
+                <p className="text-xs text-gray-400 mt-1 mb-4">送出後我們會盡快與您聯繫</p>
+                <div className="flex flex-col gap-3">
+                  <input
+                    value={form.companyName}
+                    onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
+                    placeholder="乙方（公司/商號名稱）"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 text-gray-900 bg-white placeholder:text-gray-400"
+                  />
+                  <input
+                    value={form.contactPerson}
+                    onChange={(e) => setForm((f) => ({ ...f, contactPerson: e.target.value }))}
+                    placeholder="代表人"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 text-gray-900 bg-white placeholder:text-gray-400"
+                  />
+                  <input
+                    value={form.taxId}
+                    onChange={(e) => setForm((f) => ({ ...f, taxId: e.target.value }))}
+                    placeholder="統一編號"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 text-gray-900 bg-white placeholder:text-gray-400"
+                  />
+                  <input
+                    value={form.phone}
+                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                    placeholder="電話"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 text-gray-900 bg-white placeholder:text-gray-400"
+                  />
+                  <input
+                    value={form.address}
+                    onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                    placeholder="地址"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 text-gray-900 bg-white placeholder:text-gray-400"
+                  />
+                </div>
+
+                {formError && <p className="text-xs text-red-500 mt-3 text-center">{formError}</p>}
+
+                <button
+                  onClick={handleSubmitForm}
+                  disabled={submitting}
+                  className="mt-5 w-full py-3 rounded-full font-bold text-white disabled:opacity-60"
+                  style={{ backgroundColor: accent }}
+                >
+                  {submitting ? '送出中...' : '確認送出'}
+                </button>
+                <button
+                  onClick={() => setShowForm(false)}
+                  className="mt-2 w-full py-2 text-sm text-gray-400"
+                >
+                  取消
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

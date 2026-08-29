@@ -4,7 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 type Visit = { _id: string; visitedAt: string; durationSec: number };
-type InterestClick = { clickedAt: string };
+type InterestClick = {
+  clickedAt: string;
+  companyName?: string;
+  contactPerson?: string;
+  taxId?: string;
+  phone?: string;
+  address?: string;
+};
 type Lead = {
   _id: string;
   customerName: string;
@@ -88,6 +95,22 @@ export default function QuoteLeadsPage() {
                   )}
                 </div>
               </button>
+
+              {isOpen && interestCount > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-2">
+                  <p className="text-xs font-bold text-rose-500">客戶填寫的簽約資料</p>
+                  {[...(lead.interestClicks ?? [])].reverse().map((c, i) => (
+                    <div key={i} className="bg-rose-50 rounded-lg p-2.5 text-xs text-gray-700 flex flex-col gap-0.5">
+                      <p className="text-[10px] text-gray-400 mb-1">{new Date(c.clickedAt).toLocaleString('zh-TW')}</p>
+                      {c.companyName && <p>乙方：{c.companyName}</p>}
+                      {c.contactPerson && <p>代表人：{c.contactPerson}</p>}
+                      {c.taxId && <p>統一編號：{c.taxId}</p>}
+                      {c.phone && <p>電話：{c.phone}</p>}
+                      {c.address && <p>地址：{c.address}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {isOpen && visitCount > 0 && (
                 <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-1.5">
