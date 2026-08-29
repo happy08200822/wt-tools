@@ -280,7 +280,7 @@ function BlockEditor({
           value={block.title}
           onChange={(e) => onChange((b) => (b.type === 'header' ? { ...b, title: e.target.value } : b))}
           placeholder="標題文字"
-          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5"
+          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
         />
       )}
 
@@ -290,7 +290,7 @@ function BlockEditor({
           onChange={(e) => onChange((b) => (b.type === 'text' ? { ...b, text: e.target.value } : b))}
           placeholder="文字內容"
           rows={3}
-          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 resize-none"
+          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 resize-none text-gray-900 bg-white placeholder:text-gray-400"
         />
       )}
 
@@ -309,7 +309,7 @@ function BlockEditor({
                   })
                 }
                 placeholder="項目"
-                className="w-24 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                className="w-24 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
               />
               <input
                 value={row.value}
@@ -322,7 +322,7 @@ function BlockEditor({
                   })
                 }
                 placeholder="內容"
-                className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
               />
               <button
                 onClick={() =>
@@ -362,7 +362,7 @@ function BlockEditor({
                   })
                 }
                 placeholder="項目名稱"
-                className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
               />
               <input
                 value={item.price}
@@ -376,7 +376,7 @@ function BlockEditor({
                 }
                 placeholder="金額"
                 inputMode="numeric"
-                className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
               />
               <button
                 onClick={() =>
@@ -416,7 +416,7 @@ function BlockEditor({
                   })
                 }
                 placeholder="例：8/30（五）14:00"
-                className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
               />
               <button
                 onClick={() =>
@@ -438,52 +438,95 @@ function BlockEditor({
       )}
 
       {block.type === 'buttons' && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {block.buttons.map((btn, i) => (
-            <div key={i} className="flex gap-1.5">
-              <input
-                value={btn.label}
-                onChange={(e) =>
-                  onChange((b) => {
-                    if (b.type !== 'buttons') return b;
-                    const buttons = [...b.buttons];
-                    buttons[i] = { ...buttons[i], label: e.target.value };
-                    return { ...b, buttons };
-                  })
-                }
-                placeholder="按鈕文字"
-                className="w-28 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
-              />
-              <input
-                value={btn.url}
-                onChange={(e) =>
-                  onChange((b) => {
-                    if (b.type !== 'buttons') return b;
-                    const buttons = [...b.buttons];
-                    buttons[i] = { ...buttons[i], url: e.target.value };
-                    return { ...b, buttons };
-                  })
-                }
-                placeholder="https://"
-                className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5"
-              />
-              <button
-                onClick={() =>
-                  onChange((b) =>
-                    b.type === 'buttons' ? { ...b, buttons: b.buttons.filter((_, j) => j !== i) } : b
-                  )
-                }
-                className="text-xs text-gray-300 hover:text-red-500 px-1"
-              >
-                ✕
-              </button>
+            <div key={i} className="flex flex-col gap-1 rounded-lg border border-gray-100 p-2">
+              <div className="flex gap-1.5">
+                <select
+                  value={btn.type}
+                  onChange={(e) =>
+                    onChange((b) => {
+                      if (b.type !== 'buttons') return b;
+                      const buttons = [...b.buttons];
+                      const label = buttons[i].label;
+                      buttons[i] =
+                        e.target.value === 'uri'
+                          ? { type: 'uri', label, url: 'https://' }
+                          : { type: 'message', label, text: '' };
+                      return { ...b, buttons };
+                    })
+                  }
+                  className="text-xs border border-gray-200 rounded-lg px-1.5 py-1.5 text-gray-900 bg-white"
+                >
+                  <option value="uri">開連結</option>
+                  <option value="message">傳送文字</option>
+                </select>
+                <input
+                  value={btn.label}
+                  onChange={(e) =>
+                    onChange((b) => {
+                      if (b.type !== 'buttons') return b;
+                      const buttons = [...b.buttons];
+                      buttons[i] = { ...buttons[i], label: e.target.value };
+                      return { ...b, buttons };
+                    })
+                  }
+                  placeholder="按鈕文字"
+                  className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+                />
+                <button
+                  onClick={() =>
+                    onChange((b) =>
+                      b.type === 'buttons' ? { ...b, buttons: b.buttons.filter((_, j) => j !== i) } : b
+                    )
+                  }
+                  className="text-xs text-gray-300 hover:text-red-500 px-1"
+                >
+                  ✕
+                </button>
+              </div>
+              {btn.type === 'uri' ? (
+                <input
+                  value={btn.url}
+                  onChange={(e) =>
+                    onChange((b) => {
+                      if (b.type !== 'buttons') return b;
+                      const buttons = [...b.buttons];
+                      const target = buttons[i];
+                      if (target.type !== 'uri') return b;
+                      buttons[i] = { ...target, url: e.target.value };
+                      return { ...b, buttons };
+                    })
+                  }
+                  placeholder="https://"
+                  className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+                />
+              ) : (
+                <input
+                  value={btn.text}
+                  onChange={(e) =>
+                    onChange((b) => {
+                      if (b.type !== 'buttons') return b;
+                      const buttons = [...b.buttons];
+                      const target = buttons[i];
+                      if (target.type !== 'message') return b;
+                      buttons[i] = { ...target, text: e.target.value };
+                      return { ...b, buttons };
+                    })
+                  }
+                  placeholder="按下後要自動送出的文字"
+                  className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+                />
+              )}
             </div>
           ))}
           {block.buttons.length < 2 && (
             <button
               onClick={() =>
                 onChange((b) =>
-                  b.type === 'buttons' ? { ...b, buttons: [...b.buttons, { label: '', url: 'https://' }] } : b
+                  b.type === 'buttons'
+                    ? { ...b, buttons: [...b.buttons, { type: 'uri', label: '', url: 'https://' }] }
+                    : b
                 )
               }
               className="text-xs text-gray-400 hover:text-gray-600 self-start"
@@ -499,7 +542,7 @@ function BlockEditor({
           value={block.text}
           onChange={(e) => onChange((b) => (b.type === 'footer' ? { ...b, text: e.target.value } : b))}
           placeholder="公司/品牌名稱"
-          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5"
+          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
         />
       )}
     </div>

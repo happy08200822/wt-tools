@@ -5,7 +5,10 @@ export type TextBlock = { id: string; type: 'text'; text: string };
 export type InfoRowsBlock = { id: string; type: 'infoRows'; rows: { label: string; value: string }[] };
 export type ItemListBlock = { id: string; type: 'itemList'; items: { name: string; price: string }[] };
 export type SlotListBlock = { id: string; type: 'slotList'; slots: string[] };
-export type ButtonsBlock = { id: string; type: 'buttons'; buttons: { label: string; url: string }[] };
+export type ButtonAction =
+  | { type: 'uri'; label: string; url: string }
+  | { type: 'message'; label: string; text: string };
+export type ButtonsBlock = { id: string; type: 'buttons'; buttons: ButtonAction[] };
 export type FooterBlock = { id: string; type: 'footer'; text: string };
 
 export type Block =
@@ -47,7 +50,7 @@ export function createBlock(type: Block['type']): Block {
     case 'slotList':
       return { id, type, slots: [''] };
     case 'buttons':
-      return { id, type, buttons: [{ label: '按鈕文字', url: 'https://' }] };
+      return { id, type, buttons: [{ type: 'uri', label: '按鈕文字', url: 'https://' }] };
     case 'footer':
       return { id, type, text: '公司/品牌名稱' };
   }
@@ -79,7 +82,7 @@ export const TEMPLATES: Template[] = [
       {
         id: newId(),
         type: 'buttons',
-        buttons: [{ label: '加我好友', url: 'https://line.me/ti/p/' }],
+        buttons: [{ type: 'uri', label: '加我好友', url: 'https://line.me/ti/p/' }],
       },
       { id: newId(), type: 'footer', text: '' },
     ],
@@ -106,7 +109,7 @@ export const TEMPLATES: Template[] = [
       {
         id: newId(),
         type: 'buttons',
-        buttons: [{ label: '查看詳情', url: 'https://' }],
+        buttons: [{ type: 'uri', label: '查看詳情', url: 'https://' }],
       },
       { id: newId(), type: 'footer', text: '' },
     ],
@@ -130,7 +133,7 @@ export const TEMPLATES: Template[] = [
       {
         id: newId(),
         type: 'buttons',
-        buttons: [{ label: '確認訂購', url: 'https://' }],
+        buttons: [{ type: 'uri', label: '確認訂購', url: 'https://' }],
       },
       { id: newId(), type: 'footer', text: '' },
     ],
@@ -150,7 +153,7 @@ export const TEMPLATES: Template[] = [
       {
         id: newId(),
         type: 'buttons',
-        buttons: [{ label: '回覆預約時段', url: 'https://' }],
+        buttons: [{ type: 'message', label: '我要預約', text: '我想預約，方便的時段是：' }],
       },
       { id: newId(), type: 'footer', text: '' },
     ],
@@ -311,7 +314,9 @@ function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {
     }
 
     case 'buttons': {
-      const buttons = block.buttons.filter((b) => b.label.trim() && b.url.trim());
+      const buttons = block.buttons.filter(
+        (b) => b.label.trim() && (b.type === 'uri' ? b.url.trim() : b.text.trim())
+      );
       if (buttons.length === 0) return [];
       return [
         {
@@ -321,7 +326,10 @@ function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {
           margin: 'md',
           contents: buttons.map((b) => ({
             type: 'button',
-            action: { type: 'uri', label: b.label, uri: b.url },
+            action:
+              b.type === 'uri'
+                ? { type: 'uri', label: b.label, uri: b.url }
+                : { type: 'message', label: b.label, text: b.text },
             style: 'primary',
             color: accentColor,
             height: 'sm',
