@@ -32,6 +32,7 @@ const QuoteLeadSchema = new Schema(
     interestClicks: [
       {
         clickedAt: { type: Date, default: Date.now },
+        selectedPlan: { type: String, default: '' },
         companyName: { type: String, default: '' },
         contactPerson: { type: String, default: '' },
         taxId: { type: String, default: '' },

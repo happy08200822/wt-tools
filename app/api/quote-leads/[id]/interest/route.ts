@@ -19,6 +19,7 @@ export async function POST(request: Request, { params }: Params) {
   const field = (v: unknown) => (typeof v === 'string' ? v.trim().slice(0, 200) : '');
   const entry = {
     clickedAt: new Date(),
+    selectedPlan: field(body?.selectedPlan),
     companyName: field(body?.companyName),
     contactPerson: field(body?.contactPerson),
     taxId: field(body?.taxId),
@@ -36,6 +37,7 @@ export async function POST(request: Request, { params }: Params) {
   if (owner?.lineUserId) {
     const lines = [
       `🔥 客戶「${lead.customerName}」在報價頁填寫了簽約資料！`,
+      entry.selectedPlan && `選擇方案：${entry.selectedPlan}`,
       entry.companyName && `乙方：${entry.companyName}`,
       entry.contactPerson && `代表人：${entry.contactPerson}`,
       entry.taxId && `統一編號：${entry.taxId}`,

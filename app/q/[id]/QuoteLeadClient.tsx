@@ -34,8 +34,22 @@ const CONTRACT_STEPS = [
   },
 ];
 
-type ContractForm = { companyName: string; contactPerson: string; taxId: string; phone: string; address: string };
-const EMPTY_FORM: ContractForm = { companyName: '', contactPerson: '', taxId: '', phone: '', address: '' };
+type ContractForm = {
+  selectedPlan: string;
+  companyName: string;
+  contactPerson: string;
+  taxId: string;
+  phone: string;
+  address: string;
+};
+const EMPTY_FORM: ContractForm = {
+  selectedPlan: '',
+  companyName: '',
+  contactPerson: '',
+  taxId: '',
+  phone: '',
+  address: '',
+};
 
 export default function QuoteLeadClient({ id }: { id: string }) {
   const [lead, setLead] = useState<LeadData | null>(null);
@@ -55,7 +69,11 @@ export default function QuoteLeadClient({ id }: { id: string }) {
         if (!res.ok) throw new Error();
         return res.json();
       })
-      .then((data: LeadData) => setLead(data))
+      .then((data: LeadData) => {
+        setLead(data);
+        const defaultPlan = data.plans.find((p) => p.highlight) ?? data.plans[0];
+        if (defaultPlan) setForm((f) => ({ ...f, selectedPlan: defaultPlan.title }));
+      })
       .catch(() => setError('找不到這份報價，連結可能已失效'));
   }, [id]);
 
@@ -88,6 +106,10 @@ export default function QuoteLeadClient({ id }: { id: string }) {
   }, [id]);
 
   async function handleSubmitForm() {
+    if (!form.selectedPlan) {
+      setFormError('請選擇一個方案');
+      return;
+    }
     if (!form.companyName.trim() || !form.phone.trim()) {
       setFormError('請至少填寫「乙方」跟「電話」');
       return;
@@ -344,6 +366,28 @@ export default function QuoteLeadClient({ id }: { id: string }) {
               <>
                 <p className="text-base font-extrabold text-gray-900">提供以下資料，我先打合約給您過目</p>
                 <p className="text-xs text-gray-400 mt-1 mb-4">送出後我們會盡快與您聯繫</p>
+
+                <p className="text-xs font-semibold text-gray-500 mb-1.5">選擇方案</p>
+                <div className="flex flex-col gap-2 mb-4">
+                  {lead.plans.map((p, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, selectedPlan: p.title }))}
+                      className="flex items-center justify-between gap-2 rounded-xl border-2 px-3 py-2.5 text-left transition-colors"
+                      style={{
+                        borderColor: form.selectedPlan === p.title ? accent : '#E5E7EB',
+                        backgroundColor: form.selectedPlan === p.title ? lightenColor(accent, 0.92) : '#FFFFFF',
+                      }}
+                    >
+                      <span className="text-sm font-bold text-gray-900">{p.title}</span>
+                      <span className="text-sm font-bold" style={{ color: accent }}>
+                        {p.price}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
                 <div className="flex flex-col gap-3">
                   <input
                     value={form.companyName}
