@@ -1,18 +1,21 @@
 // 卡片是由一串「區塊」組成，模板只是預先組好的區塊清單，使用者可以在畫面上自由增刪調整
 
 export type HeaderBlock = { id: string; type: 'header'; title: string };
+export type HeroBlock = { id: string; type: 'hero'; imageUrl: string };
 export type TextBlock = { id: string; type: 'text'; text: string };
 export type InfoRowsBlock = { id: string; type: 'infoRows'; rows: { label: string; value: string }[] };
 export type ItemListBlock = { id: string; type: 'itemList'; items: { name: string; price: string }[] };
 export type SlotListBlock = { id: string; type: 'slotList'; slots: string[] };
 // LINE 的 shareTargetPicker 送 Flex Message 時，按鈕動作只支援 uri（開連結），
 // 放其他動作類型（例如 message）會導致整張卡片送出後「看起來成功、實際沒送到」且不報錯
-export type ButtonAction = { type: 'uri'; label: string; url: string };
+export type ButtonStyle = 'primary' | 'secondary' | 'link';
+export type ButtonAction = { type: 'uri'; label: string; url: string; style: ButtonStyle };
 export type ButtonsBlock = { id: string; type: 'buttons'; buttons: ButtonAction[] };
 export type FooterBlock = { id: string; type: 'footer'; text: string };
 
 export type Block =
   | HeaderBlock
+  | HeroBlock
   | TextBlock
   | InfoRowsBlock
   | ItemListBlock
@@ -22,6 +25,7 @@ export type Block =
 
 export const BLOCK_TYPE_LABEL: Record<Block['type'], string> = {
   header: '標題列',
+  hero: '主圖',
   text: '文字段落',
   infoRows: '資訊列',
   itemList: '項目清單',
@@ -29,6 +33,22 @@ export const BLOCK_TYPE_LABEL: Record<Block['type'], string> = {
   buttons: '按鈕',
   footer: '落款',
 };
+
+export const BUTTON_STYLE_LABEL: Record<ButtonStyle, string> = {
+  primary: '實心',
+  secondary: '淺底',
+  link: '純文字',
+};
+
+// 把主色和白色依比例混合，用來算漸層背景的淺色端、以及 secondary 按鈕的淺底色
+export function lightenColor(hex: string, ratio: number): string {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const mix = (channel: number) => Math.round(channel + (255 - channel) * ratio);
+  return `#${[mix(r), mix(g), mix(b)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
 
 let idCounter = 0;
 function newId() {
@@ -41,6 +61,8 @@ export function createBlock(type: Block['type']): Block {
   switch (type) {
     case 'header':
       return { id, type, title: '標題文字' };
+    case 'hero':
+      return { id, type, imageUrl: '' };
     case 'text':
       return { id, type, text: '這裡是文字內容' };
     case 'infoRows':
@@ -50,7 +72,7 @@ export function createBlock(type: Block['type']): Block {
     case 'slotList':
       return { id, type, slots: [''] };
     case 'buttons':
-      return { id, type, buttons: [{ type: 'uri', label: '按鈕文字', url: 'https://' }] };
+      return { id, type, buttons: [{ type: 'uri', label: '按鈕文字', url: 'https://', style: 'primary' }] };
     case 'footer':
       return { id, type, text: '公司/品牌名稱' };
   }
@@ -82,7 +104,7 @@ export const TEMPLATES: Template[] = [
       {
         id: newId(),
         type: 'buttons',
-        buttons: [{ type: 'uri', label: '加我好友', url: 'https://line.me/ti/p/' }],
+        buttons: [{ type: 'uri', label: '加我好友', url: 'https://line.me/ti/p/', style: 'primary' }],
       },
       { id: newId(), type: 'footer', text: '' },
     ],
@@ -109,7 +131,7 @@ export const TEMPLATES: Template[] = [
       {
         id: newId(),
         type: 'buttons',
-        buttons: [{ type: 'uri', label: '查看詳情', url: 'https://' }],
+        buttons: [{ type: 'uri', label: '查看詳情', url: 'https://', style: 'primary' }],
       },
       { id: newId(), type: 'footer', text: '' },
     ],
@@ -133,7 +155,7 @@ export const TEMPLATES: Template[] = [
       {
         id: newId(),
         type: 'buttons',
-        buttons: [{ type: 'uri', label: '確認訂購', url: 'https://' }],
+        buttons: [{ type: 'uri', label: '確認訂購', url: 'https://', style: 'primary' }],
       },
       { id: newId(), type: 'footer', text: '' },
     ],
@@ -153,7 +175,7 @@ export const TEMPLATES: Template[] = [
       {
         id: newId(),
         type: 'buttons',
-        buttons: [{ type: 'uri', label: '回覆預約時段', url: 'https://' }],
+        buttons: [{ type: 'uri', label: '回覆預約時段', url: 'https://', style: 'primary' }],
       },
       { id: newId(), type: 'footer', text: '' },
     ],
@@ -172,6 +194,9 @@ const VALID_URI_PATTERN = /^(https?:\/\/[^\s/]+|tel:\S+|mailto:\S+|line:\/\/\S+)
 
 export function validateBlocks(blocks: Block[]): string | null {
   for (const block of blocks) {
+    if (block.type === 'hero' && block.imageUrl.trim() && !/^https?:\/\//i.test(block.imageUrl.trim())) {
+      return `主圖網址不是有效的 http(s) 連結：${block.imageUrl}`;
+    }
     if (block.type !== 'buttons') continue;
     for (const btn of block.buttons) {
       if (!btn.label.trim()) continue; // 空按鈕會被自動忽略，不用檔
@@ -191,20 +216,37 @@ export function buildFlexBubble(blocks: Block[], accentColor: string): FlexConte
   const bodyContents: FlexContent[] = [];
 
   for (const block of blocks) {
-    if (block.type === 'header') continue; // header 另外處理
+    if (block.type === 'header' || block.type === 'hero') continue; // 另外處理
     bodyContents.push(...blockToFlexContents(block, accentColor));
   }
 
   const header = blocks.find((b): b is HeaderBlock => b.type === 'header');
+  const hero = blocks.find((b): b is HeroBlock => b.type === 'hero' && b.imageUrl.trim() !== '');
 
   return {
     type: 'bubble',
+    ...(hero
+      ? {
+          hero: {
+            type: 'image',
+            url: hero.imageUrl.trim(),
+            size: 'full',
+            aspectRatio: '20:13',
+            aspectMode: 'cover',
+          },
+        }
+      : {}),
     ...(header
       ? {
           header: {
             type: 'box',
             layout: 'vertical',
-            backgroundColor: accentColor,
+            background: {
+              type: 'linearGradient',
+              angle: '135deg',
+              startColor: accentColor,
+              endColor: lightenColor(accentColor, 0.35),
+            },
             paddingAll: '16px',
             contents: [
               {
@@ -342,8 +384,8 @@ function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {
           contents: buttons.map((b) => ({
             type: 'button',
             action: { type: 'uri', label: b.label, uri: b.url },
-            style: 'primary',
-            color: accentColor,
+            style: b.style,
+            color: b.style === 'secondary' ? lightenColor(accentColor, 0.85) : accentColor,
             height: 'sm',
           })),
         },

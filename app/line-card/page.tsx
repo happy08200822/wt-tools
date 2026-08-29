@@ -5,10 +5,13 @@ import Script from 'next/script';
 import {
   Block,
   BLOCK_TYPE_LABEL,
+  BUTTON_STYLE_LABEL,
+  ButtonStyle,
   TEMPLATES,
   createBlock,
   buildFlexBubble,
   validateBlocks,
+  lightenColor,
 } from './blocks';
 
 const LIFF_ID = '2005817629-5BePAHi6';
@@ -292,6 +295,8 @@ function BlockEditor({
         />
       )}
 
+      {block.type === 'hero' && <HeroEditor block={block} onChange={onChange} />}
+
       {block.type === 'text' && (
         <textarea
           value={block.text}
@@ -448,43 +453,65 @@ function BlockEditor({
       {block.type === 'buttons' && (
         <div className="flex flex-col gap-1.5">
           {block.buttons.map((btn, i) => (
-            <div key={i} className="flex gap-1.5">
-              <input
-                value={btn.label}
-                onChange={(e) =>
-                  onChange((b) => {
-                    if (b.type !== 'buttons') return b;
-                    const buttons = [...b.buttons];
-                    buttons[i] = { ...buttons[i], label: e.target.value };
-                    return { ...b, buttons };
-                  })
-                }
-                placeholder="按鈕文字"
-                className="w-28 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
-              />
-              <input
-                value={btn.url}
-                onChange={(e) =>
-                  onChange((b) => {
-                    if (b.type !== 'buttons') return b;
-                    const buttons = [...b.buttons];
-                    buttons[i] = { ...buttons[i], url: e.target.value };
-                    return { ...b, buttons };
-                  })
-                }
-                placeholder="https://"
-                className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
-              />
-              <button
-                onClick={() =>
-                  onChange((b) =>
-                    b.type === 'buttons' ? { ...b, buttons: b.buttons.filter((_, j) => j !== i) } : b
-                  )
-                }
-                className="text-xs text-gray-300 hover:text-red-500 px-1"
-              >
-                ✕
-              </button>
+            <div key={i} className="flex flex-col gap-1 rounded-lg border border-gray-100 p-2">
+              <div className="flex gap-1.5">
+                <input
+                  value={btn.label}
+                  onChange={(e) =>
+                    onChange((b) => {
+                      if (b.type !== 'buttons') return b;
+                      const buttons = [...b.buttons];
+                      buttons[i] = { ...buttons[i], label: e.target.value };
+                      return { ...b, buttons };
+                    })
+                  }
+                  placeholder="按鈕文字"
+                  className="w-24 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+                />
+                <input
+                  value={btn.url}
+                  onChange={(e) =>
+                    onChange((b) => {
+                      if (b.type !== 'buttons') return b;
+                      const buttons = [...b.buttons];
+                      buttons[i] = { ...buttons[i], url: e.target.value };
+                      return { ...b, buttons };
+                    })
+                  }
+                  placeholder="https://"
+                  className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+                />
+                <button
+                  onClick={() =>
+                    onChange((b) =>
+                      b.type === 'buttons' ? { ...b, buttons: b.buttons.filter((_, j) => j !== i) } : b
+                    )
+                  }
+                  className="text-xs text-gray-300 hover:text-red-500 px-1"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex gap-1">
+                {(Object.keys(BUTTON_STYLE_LABEL) as ButtonStyle[]).map((style) => (
+                  <button
+                    key={style}
+                    onClick={() =>
+                      onChange((b) => {
+                        if (b.type !== 'buttons') return b;
+                        const buttons = [...b.buttons];
+                        buttons[i] = { ...buttons[i], style };
+                        return { ...b, buttons };
+                      })
+                    }
+                    className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                      btn.style === style ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-500'
+                    }`}
+                  >
+                    {BUTTON_STYLE_LABEL[style]}
+                  </button>
+                ))}
+              </div>
             </div>
           ))}
           {block.buttons.length < 2 && (
@@ -492,7 +519,7 @@ function BlockEditor({
               onClick={() =>
                 onChange((b) =>
                   b.type === 'buttons'
-                    ? { ...b, buttons: [...b.buttons, { type: 'uri', label: '', url: 'https://' }] }
+                    ? { ...b, buttons: [...b.buttons, { type: 'uri', label: '', url: 'https://', style: 'primary' }] }
                     : b
                 )
               }
@@ -516,19 +543,78 @@ function BlockEditor({
   );
 }
 
+function HeroEditor({
+  block,
+  onChange,
+}: {
+  block: Extract<Block, { type: 'hero' }>;
+  onChange: (updater: (block: Block) => Block) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError('');
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '上傳失敗');
+      onChange((b) => (b.type === 'hero' ? { ...b, imageUrl: data.url } : b));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '上傳失敗');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <input
+        value={block.imageUrl}
+        onChange={(e) => onChange((b) => (b.type === 'hero' ? { ...b, imageUrl: e.target.value } : b))}
+        placeholder="貼上圖片網址，或用下方上傳"
+        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+      />
+      <input
+        type="file"
+        accept="image/*"
+        onChange={handleUpload}
+        disabled={uploading}
+        className="text-xs text-gray-500 file:mr-2 file:px-3 file:py-1 file:rounded-full file:border-0 file:bg-gray-100 file:text-gray-600 file:text-xs"
+      />
+      {uploading && <p className="text-xs text-gray-400">上傳中...</p>}
+      {error && <p className="text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
 function CardPreview({ blocks, accentColor }: { blocks: Block[]; accentColor: string }) {
   const header = blocks.find((b) => b.type === 'header');
+  const hero = blocks.find((b) => b.type === 'hero' && b.imageUrl.trim());
 
   return (
     <div className="w-full max-w-[300px] bg-white rounded-2xl shadow-lg overflow-hidden">
+      {hero && hero.type === 'hero' && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={hero.imageUrl} alt="" className="w-full aspect-[20/13] object-cover" />
+      )}
       {header && header.type === 'header' && (
-        <div className="px-4 py-3 text-center" style={{ backgroundColor: accentColor }}>
+        <div
+          className="px-4 py-3 text-center"
+          style={{ background: `linear-gradient(135deg, ${accentColor}, ${lightenColor(accentColor, 0.35)})` }}
+        >
           <p className="text-white font-bold text-sm break-words">{header.title || ' '}</p>
         </div>
       )}
       <div className="p-4 flex flex-col gap-3">
         {blocks
-          .filter((b) => b.type !== 'header')
+          .filter((b) => b.type !== 'header' && b.type !== 'hero')
           .map((block) => (
             <PreviewBlock key={block.id} block={block} accentColor={accentColor} />
           ))}
@@ -597,15 +683,19 @@ function PreviewBlock({ block, accentColor }: { block: Block; accentColor: strin
       if (buttons.length === 0) return null;
       return (
         <div className={`flex gap-2 ${buttons.length > 1 ? 'flex-row' : 'flex-col'}`}>
-          {buttons.map((b, i) => (
-            <div
-              key={i}
-              className="flex-1 text-center text-white text-sm font-bold rounded-lg px-3 py-2"
-              style={{ backgroundColor: accentColor }}
-            >
-              {b.label}
-            </div>
-          ))}
+          {buttons.map((b, i) => {
+            const style: React.CSSProperties =
+              b.style === 'link'
+                ? { color: accentColor, background: 'transparent', fontWeight: 700 }
+                : b.style === 'secondary'
+                  ? { backgroundColor: lightenColor(accentColor, 0.85), color: '#333333' }
+                  : { backgroundColor: accentColor, color: '#FFFFFF' };
+            return (
+              <div key={i} className="flex-1 text-center text-sm font-bold rounded-lg px-3 py-2" style={style}>
+                {b.label}
+              </div>
+            );
+          })}
         </div>
       );
     }
