@@ -86,19 +86,20 @@ export const TEMPLATES: Template[] = [
     label: '自我介紹',
     description: '第一次接觸客戶時的自我介紹卡片',
     blocks: () => [
-      { id: newId(), type: 'header', title: '👋 您好，很高興認識您' },
+      { id: newId(), type: 'header', title: '👋 哈囉您好！' },
+      { id: newId(), type: 'hero', imageUrl: '' },
       {
         id: newId(),
         type: 'text',
-        text: '您好，我是暐庭，很高興能為您服務！如果有任何需求歡迎隨時與我聯繫～',
+        text: '我是 ezPretty 的業務 暐庭，看到您留下的資料，想簡單了解一下您目前的需求，方便跟您聊聊嗎？😊',
       },
       {
         id: newId(),
         type: 'infoRows',
         rows: [
-          { label: '姓名', value: '暐庭' },
-          { label: '公司', value: '' },
-          { label: '聯絡方式', value: '' },
+          { label: '姓名', value: '黃暐庭 Wei' },
+          { label: '公司', value: '預的科技行銷股份有限公司' },
+          { label: '聯絡方式', value: '0985 009 294' },
         ],
       },
       {
@@ -106,7 +107,7 @@ export const TEMPLATES: Template[] = [
         type: 'buttons',
         buttons: [{ type: 'uri', label: '加我好友', url: 'https://line.me/ti/p/', style: 'primary' }],
       },
-      { id: newId(), type: 'footer', text: '' },
+      { id: newId(), type: 'footer', text: 'ezPretty 預約科技' },
     ],
   },
   {
@@ -139,25 +140,33 @@ export const TEMPLATES: Template[] = [
   {
     id: 'quote',
     label: '報價單',
-    description: '列出項目與金額的報價卡片',
+    description: '列出方案與金額的報價卡片',
     blocks: () => [
-      { id: newId(), type: 'header', title: '💰 報價明細' },
-      { id: newId(), type: 'text', text: '以下是為您準備的報價，如有疑問歡迎隨時詢問。' },
+      { id: newId(), type: 'header', title: '💰 報價方案' },
       {
         id: newId(),
-        type: 'itemList',
-        items: [
-          { name: '項目一', price: '1000' },
-          { name: '項目二', price: '2000' },
-        ],
+        type: 'text',
+        text: '老師您好！感謝您撥空聆聽我們的線上展示☕\n以下提供 ezPretty 預約系統報價給您做參考',
       },
-      { id: newId(), type: 'text', text: '＊ 報價有效期限 7 天，實際費用依最終確認為準。' },
+      {
+        id: newId(),
+        type: 'text',
+        text:
+          '1️⃣ 一年方案\n費用：18,000 + 6,000（設定費）= $24,000\n（使用人數：1人+ 贈2人，共3人）\n\n' +
+          '2️⃣ 優惠兩年方案 🎁 免設定費\n費用：$36,000\n（使用人數：1人+ 贈2人，共3人）\n💡 現省 $6,000 設定費！\n\n' +
+          '3️⃣ 優惠三年方案 🎁 免設定費、月費 -100\n費用：$50,400\n（使用人數：1人+ 贈2人，共3人）\n💡 現省 $6,000 設定費、$3,600 月費！',
+      },
+      {
+        id: newId(),
+        type: 'text',
+        text: '如果本月決定簽約的話，再多送您 3 個月（價值 $4,500）😌\n之後政府補助開放申請，可先登記排隊，申請通過後再贈送一年🎁',
+      },
       {
         id: newId(),
         type: 'buttons',
         buttons: [{ type: 'uri', label: '確認訂購', url: 'https://', style: 'primary' }],
       },
-      { id: newId(), type: 'footer', text: '' },
+      { id: newId(), type: 'footer', text: 'ezPretty 預約科技' },
     ],
   },
   {
