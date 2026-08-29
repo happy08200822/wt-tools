@@ -87,6 +87,22 @@ const TOOLS = [
     desc: "選擇身份發表文章，只能刪除自己發表過的內容。",
     gradient: "from-sky-400 to-blue-700",
   },
+  {
+    href: "/upload",
+    emoji: "🖼️",
+    tag: "工具",
+    title: "圖片上傳",
+    desc: "上傳圖片到 Vercel Blob，取得可直接分享的圖片網址。",
+    gradient: "from-orange-400 to-orange-700",
+  },
+  {
+    href: "/contracts",
+    emoji: "📄",
+    tag: "AI 分析",
+    title: "AI 合約審查器",
+    desc: "上傳合約 PDF，Gemini 找出風險條款並給修改建議，結果存進 MongoDB。",
+    gradient: "from-slate-500 to-slate-800",
+  },
 ];
 
 export default async function Home() {
@@ -113,9 +129,23 @@ export default async function Home() {
           </nav>
           <div className="flex items-center gap-3">
             {currentUser && (
-              <span className="hidden sm:inline text-sm text-slate-500">
-                你好，{currentUser.name}
-              </span>
+              <Link href="/profile" className="flex items-center gap-2 group">
+                {currentUser.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={currentUser.image}
+                    alt={currentUser.name}
+                    className="h-7 w-7 rounded-full object-cover border border-slate-200"
+                  />
+                ) : (
+                  <span className="h-7 w-7 rounded-full bg-teal-100 text-teal-700 text-xs font-bold flex items-center justify-center">
+                    {currentUser.name?.[0] ?? '?'}
+                  </span>
+                )}
+                <span className="hidden sm:inline text-sm text-slate-500 group-hover:text-slate-900 transition-colors">
+                  你好，{currentUser.name}
+                </span>
+              </Link>
             )}
             {currentUser?.role === "admin" && (
               <Link

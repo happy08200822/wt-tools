@@ -20,12 +20,35 @@ type LogEntry = {
   costUsd: number;
 };
 
+type ContractUserStat = {
+  userId: string;
+  name: string;
+  email?: string;
+  count: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+};
+
+type ContractLogEntry = {
+  _id: string;
+  fileName: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  createdAt: string;
+  user?: { name: string; email: string } | null;
+};
+
 export default function RichMenuAdminPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [users, setUsers] = useState<UserUsage[] | null>(null);
   const [log, setLog] = useState<LogEntry[] | null>(null);
+  const [contractUsers, setContractUsers] = useState<ContractUserStat[] | null>(null);
+  const [contractLog, setContractLog] = useState<ContractLogEntry[] | null>(null);
 
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
@@ -40,7 +63,11 @@ export default function RichMenuAdminPage() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '操作失敗');
-    return data as { users: UserUsage[]; log: LogEntry[] };
+    return data as {
+      users: UserUsage[];
+      log: LogEntry[];
+      contracts: { byUser: ContractUserStat[]; recent: ContractLogEntry[] };
+    };
   }
 
   async function handleLoad() {
@@ -50,6 +77,8 @@ export default function RichMenuAdminPage() {
       const data = await callAdmin();
       setUsers(data.users);
       setLog(data.log);
+      setContractUsers(data.contracts.byUser);
+      setContractLog(data.contracts.recent);
     } catch (err) {
       setError(err instanceof Error ? err.message : '讀取失敗');
     } finally {
@@ -93,7 +122,7 @@ export default function RichMenuAdminPage() {
 
   return (
     <main className="min-h-screen flex flex-col items-center gap-6 p-8 bg-slate-100">
-      <h1 className="text-2xl font-extrabold text-slate-800 mt-4">LINE 圖文選單 用量管理後台</h1>
+      <h1 className="text-2xl font-extrabold text-slate-800 mt-4">AI 用量報表</h1>
 
       <div className="flex gap-2 w-full max-w-md">
         <input
@@ -212,6 +241,95 @@ export default function RichMenuAdminPage() {
                       {new Date(l.time).toLocaleString('zh-TW')}
                     </td>
                     <td className="py-1.5 pr-3 text-slate-800 font-medium">{l.name}</td>
+                    <td className="py-1.5 pr-3 text-slate-700">
+                      {l.inputTokens.toLocaleString()} / {l.outputTokens.toLocaleString()}
+                    </td>
+                    <td className="py-1.5 pr-3 text-slate-700">${l.costUsd.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {contractUsers && (
+        <div className="w-full max-w-3xl bg-white rounded-2xl shadow p-5 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-slate-600">AI 合約審查花費（依使用者）</p>
+          {(() => {
+            const totalContractCost = contractUsers.reduce((sum, u) => sum + u.costUsd, 0);
+            const totalContractCount = contractUsers.reduce((sum, u) => sum + u.count, 0);
+            return (
+              <p className="text-sm text-slate-500">
+                總計：{totalContractCount} 份合約 ・ ${totalContractCost.toFixed(4)} USD（約 NT
+                {(totalContractCost * 31.5).toFixed(1)}）
+              </p>
+            );
+          })()}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-200">
+                  <th className="py-2 pr-4">使用者</th>
+                  <th className="py-2 pr-4">Email</th>
+                  <th className="py-2 pr-4">審查份數</th>
+                  <th className="py-2 pr-4">Input tokens</th>
+                  <th className="py-2 pr-4">Output tokens</th>
+                  <th className="py-2 pr-4">花費 (USD)</th>
+                  <th className="py-2 pr-4">花費 (約 NT$)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contractUsers.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-4 text-center text-slate-400">
+                      目前還沒有任何合約審查紀錄
+                    </td>
+                  </tr>
+                )}
+                {contractUsers.map((u) => (
+                  <tr key={u.userId} className="border-b border-slate-100">
+                    <td className="py-2 pr-4 font-semibold text-slate-800">{u.name}</td>
+                    <td className="py-2 pr-4 text-slate-500">{u.email ?? '-'}</td>
+                    <td className="py-2 pr-4 text-slate-700">{u.count}</td>
+                    <td className="py-2 pr-4 text-slate-700">{u.inputTokens.toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-slate-700">{u.outputTokens.toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-slate-700">${u.costUsd.toFixed(4)}</td>
+                    <td className="py-2 pr-4 text-slate-700">NT${(u.costUsd * 31.5).toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {contractLog && contractLog.length > 0 && (
+        <div className="w-full max-w-3xl bg-white rounded-2xl shadow p-5 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-slate-600">最近合約審查紀錄（最多 50 筆）</p>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-200">
+                  <th className="py-1.5 pr-3">時間</th>
+                  <th className="py-1.5 pr-3">使用者</th>
+                  <th className="py-1.5 pr-3">檔名</th>
+                  <th className="py-1.5 pr-3">風險</th>
+                  <th className="py-1.5 pr-3">Tokens (in/out)</th>
+                  <th className="py-1.5 pr-3">花費</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contractLog.map((l) => (
+                  <tr key={l._id} className="border-b border-slate-100">
+                    <td className="py-1.5 pr-3 text-slate-500">
+                      {new Date(l.createdAt).toLocaleString('zh-TW')}
+                    </td>
+                    <td className="py-1.5 pr-3 text-slate-800 font-medium">
+                      {l.user?.name ?? '（已刪除）'}
+                    </td>
+                    <td className="py-1.5 pr-3 text-slate-600 truncate max-w-[160px]">{l.fileName}</td>
+                    <td className="py-1.5 pr-3 text-slate-700">{l.riskLevel}</td>
                     <td className="py-1.5 pr-3 text-slate-700">
                       {l.inputTokens.toLocaleString()} / {l.outputTokens.toLocaleString()}
                     </td>
