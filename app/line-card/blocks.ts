@@ -11,7 +11,14 @@ export type SlotListBlock = { id: string; type: 'slotList'; slots: string[] };
 // LINE 的 shareTargetPicker 送 Flex Message 時，按鈕動作只支援 uri（開連結），
 // 放其他動作類型（例如 message）會導致整張卡片送出後「看起來成功、實際沒送到」且不報錯
 export type ButtonStyle = 'primary' | 'secondary' | 'link';
-export type ButtonAction = { type: 'uri'; label: string; url: string; style: ButtonStyle };
+// linkType 'quoteLead'：網址不是使用者手動輸入，而是發送時系統自動產生的專屬報價追蹤連結
+export type ButtonAction = {
+  type: 'uri';
+  label: string;
+  url: string;
+  style: ButtonStyle;
+  linkType?: 'custom' | 'quoteLead';
+};
 export type ButtonsBlock = { id: string; type: 'buttons'; buttons: ButtonAction[] };
 export type FooterBlock = { id: string; type: 'footer'; text: string };
 // 內容太長時，插入這個區塊可以把卡片拆成兩張左右滑動的輪播卡片；標題列/落款每頁都會重複顯示，主圖只出現在第一頁
@@ -290,12 +297,21 @@ export function validateBlocks(blocks: Block[]): string | null {
     if (block.type !== 'buttons') continue;
     for (const btn of block.buttons) {
       if (!btn.label.trim()) continue; // 空按鈕會被自動忽略，不用檔
+      if (btn.linkType === 'quoteLead') continue; // 網址是發送時才自動產生，這裡先不檢查
       if (!VALID_URI_PATTERN.test(btn.url.trim())) {
         return `按鈕「${btn.label}」的網址不完整或無效：${btn.url || '（空白）'}`;
       }
     }
   }
   return null;
+}
+
+// 把卡片裡所有「方案清單」區塊的內容攤平，給報價追蹤連結用
+export function collectPlans(blocks: Block[]): Plan[] {
+  return blocks
+    .filter((b): b is PlanListBlock => b.type === 'planList')
+    .flatMap((b) => b.plans)
+    .filter((p) => p.title.trim());
 }
 
 // --- 分頁：用「分頁符」區塊把內容拆成多頁（多個 bubble），標題列/落款每頁重複，主圖只在第一頁 ---

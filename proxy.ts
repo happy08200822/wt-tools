@@ -6,6 +6,7 @@ const { auth } = NextAuth(authConfig);
 export default auth;
 
 // 保護所有頁面路由，API、靜態資源、登入頁本身不攔截
+// /q 是給客戶看的報價追蹤頁，客戶不會、也不需要登入這個網站
 export const config = {
-  matcher: ['/((?!api|login|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!api|login|q/|_next/static|_next/image|favicon.ico).*)'],
 };

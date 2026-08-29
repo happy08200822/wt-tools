@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import Script from 'next/script';
 import {
   Block,
@@ -12,6 +13,7 @@ import {
   buildFlexMessage,
   splitIntoPages,
   validateBlocks,
+  collectPlans,
   lightenColor,
 } from './blocks';
 
@@ -49,6 +51,8 @@ export default function LineCardPage() {
   const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
   const [savingName, setSavingName] = useState('');
   const [savingBusy, setSavingBusy] = useState(false);
+
+  const [customerName, setCustomerName] = useState('');
 
   useEffect(() => {
     fetch('/api/line-card-templates')
@@ -159,12 +163,47 @@ export default function LineCardPage() {
       return;
     }
 
-    const contents = buildFlexMessage(blocks, accentColor);
-    const header = blocks.find((b) => b.type === 'header');
-    const altText = header && header.type === 'header' ? header.title : '卡片訊息';
+    const needsQuoteLead = blocks.some(
+      (b) => b.type === 'buttons' && b.buttons.some((btn) => btn.linkType === 'quoteLead')
+    );
+
+    let sendBlocks = blocks;
 
     setSending(true);
     try {
+      if (needsQuoteLead) {
+        if (!customerName.trim()) {
+          setStatus({ text: '這張卡片有報價追蹤連結按鈕，請先填寫「客戶名稱」', type: 'error' });
+          setSending(false);
+          return;
+        }
+        const plans = collectPlans(blocks);
+        if (plans.length === 0) {
+          setStatus({ text: '沒有報價方案內容可以連結，請先新增「方案清單」區塊', type: 'error' });
+          setSending(false);
+          return;
+        }
+
+        const res = await fetch('/api/quote-leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customerName: customerName.trim(), accentColor, plans }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '建立報價追蹤連結失敗');
+
+        const link = `${window.location.origin}/q/${data._id}`;
+        sendBlocks = blocks.map((b) =>
+          b.type === 'buttons'
+            ? { ...b, buttons: b.buttons.map((btn) => (btn.linkType === 'quoteLead' ? { ...btn, url: link } : btn)) }
+            : b
+        );
+      }
+
+      const contents = buildFlexMessage(sendBlocks, accentColor);
+      const header = blocks.find((b) => b.type === 'header');
+      const altText = header && header.type === 'header' ? header.title : '卡片訊息';
+
       const result = await window.liff.shareTargetPicker([
         { type: 'flex', altText: altText || '卡片訊息', contents },
       ]);
@@ -191,7 +230,12 @@ export default function LineCardPage() {
       <main className="min-h-screen flex flex-col items-center gap-6 p-6 bg-gradient-to-br from-emerald-100 via-white to-emerald-50">
         <div className="flex flex-col items-center gap-1 mt-2">
           <h1 className="text-3xl md:text-4xl font-extrabold text-gray-800">LINE 卡片發送器</h1>
-          <p className="text-sm text-gray-500">選擇模板、自由編輯內容，即時預覽後直接發送</p>
+          <p className="text-sm text-gray-500">
+            選擇模板、自由編輯內容，即時預覽後直接發送
+            <Link href="/line-card/leads" className="ml-2 text-emerald-600 underline">
+              查看報價追蹤紀錄
+            </Link>
+          </p>
         </div>
 
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
@@ -321,6 +365,18 @@ export default function LineCardPage() {
               <p className="text-sm font-bold text-gray-700 self-start mb-3">預覽</p>
               <CardPreview blocks={blocks} accentColor={accentColor} />
             </section>
+
+            {blocks.some((b) => b.type === 'buttons' && b.buttons.some((btn) => btn.linkType === 'quoteLead')) && (
+              <section className="bg-white rounded-2xl shadow p-4">
+                <label className="text-xs font-semibold text-gray-500">客戶名稱（報價追蹤連結會記錄這個名字）</label>
+                <input
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="例如：王老闆"
+                  className="w-full mt-1.5 text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+                />
+              </section>
+            )}
 
             {status && (
               <div
@@ -570,19 +626,21 @@ function BlockEditor({
                   placeholder="按鈕文字"
                   className="w-24 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
                 />
-                <input
-                  value={btn.url}
-                  onChange={(e) =>
-                    onChange((b) => {
-                      if (b.type !== 'buttons') return b;
-                      const buttons = [...b.buttons];
-                      buttons[i] = { ...buttons[i], url: e.target.value };
-                      return { ...b, buttons };
-                    })
-                  }
-                  placeholder="https://"
-                  className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
-                />
+                {btn.linkType !== 'quoteLead' && (
+                  <input
+                    value={btn.url}
+                    onChange={(e) =>
+                      onChange((b) => {
+                        if (b.type !== 'buttons') return b;
+                        const buttons = [...b.buttons];
+                        buttons[i] = { ...buttons[i], url: e.target.value };
+                        return { ...b, buttons };
+                      })
+                    }
+                    placeholder="https://"
+                    className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+                  />
+                )}
                 <button
                   onClick={() =>
                     onChange((b) =>
@@ -594,6 +652,30 @@ function BlockEditor({
                   ✕
                 </button>
               </div>
+              {btn.linkType === 'quoteLead' && (
+                <p className="text-[11px] text-gray-400 bg-gray-50 rounded px-2 py-1">
+                  🔗 發送時會自動產生專屬報價追蹤連結（需要卡片裡有「方案清單」區塊）
+                </p>
+              )}
+              <label className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                <input
+                  type="checkbox"
+                  checked={btn.linkType === 'quoteLead'}
+                  onChange={(e) =>
+                    onChange((b) => {
+                      if (b.type !== 'buttons') return b;
+                      const buttons = [...b.buttons];
+                      buttons[i] = {
+                        ...buttons[i],
+                        linkType: e.target.checked ? 'quoteLead' : 'custom',
+                        url: e.target.checked ? '' : buttons[i].url || 'https://',
+                      };
+                      return { ...b, buttons };
+                    })
+                  }
+                />
+                使用專屬報價追蹤連結
+              </label>
               <div className="flex gap-1">
                 {(Object.keys(BUTTON_STYLE_LABEL) as ButtonStyle[]).map((style) => (
                   <button
