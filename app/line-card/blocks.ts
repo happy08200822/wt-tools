@@ -5,6 +5,8 @@ export type HeroBlock = { id: string; type: 'hero'; imageUrl: string };
 export type TextBlock = { id: string; type: 'text'; text: string };
 export type InfoRowsBlock = { id: string; type: 'infoRows'; rows: { label: string; value: string }[] };
 export type ItemListBlock = { id: string; type: 'itemList'; items: { name: string; price: string }[] };
+export type Plan = { title: string; badge: string; price: string; details: string[]; highlight: boolean };
+export type PlanListBlock = { id: string; type: 'planList'; plans: Plan[] };
 export type SlotListBlock = { id: string; type: 'slotList'; slots: string[] };
 // LINE 的 shareTargetPicker 送 Flex Message 時，按鈕動作只支援 uri（開連結），
 // 放其他動作類型（例如 message）會導致整張卡片送出後「看起來成功、實際沒送到」且不報錯
@@ -19,6 +21,7 @@ export type Block =
   | TextBlock
   | InfoRowsBlock
   | ItemListBlock
+  | PlanListBlock
   | SlotListBlock
   | ButtonsBlock
   | FooterBlock;
@@ -29,6 +32,7 @@ export const BLOCK_TYPE_LABEL: Record<Block['type'], string> = {
   text: '文字段落',
   infoRows: '資訊列',
   itemList: '項目清單',
+  planList: '方案清單',
   slotList: '時段清單',
   buttons: '按鈕',
   footer: '落款',
@@ -69,6 +73,12 @@ export function createBlock(type: Block['type']): Block {
       return { id, type, rows: [{ label: '項目', value: '內容' }] };
     case 'itemList':
       return { id, type, items: [{ name: '項目名稱', price: '0' }] };
+    case 'planList':
+      return {
+        id,
+        type,
+        plans: [{ title: '方案名稱', badge: '', price: '$0', details: ['方案內容'], highlight: false }],
+      };
     case 'slotList':
       return { id, type, slots: [''] };
     case 'buttons':
@@ -150,11 +160,30 @@ export const TEMPLATES: Template[] = [
       },
       {
         id: newId(),
-        type: 'text',
-        text:
-          '1️⃣ 一年方案\n費用：18,000 + 6,000（設定費）= $24,000\n（使用人數：1人+ 贈2人，共3人）\n\n' +
-          '2️⃣ 優惠兩年方案 🎁 免設定費\n費用：$36,000\n（使用人數：1人+ 贈2人，共3人）\n💡 現省 $6,000 設定費！\n\n' +
-          '3️⃣ 優惠三年方案 🎁 免設定費、月費 -100\n費用：$50,400\n（使用人數：1人+ 贈2人，共3人）\n💡 現省 $6,000 設定費、$3,600 月費！',
+        type: 'planList',
+        plans: [
+          {
+            title: '一年方案',
+            badge: '',
+            price: '$24,000',
+            details: ['18,000 + 6,000（設定費）', '使用人數：1人＋贈2人，共3人'],
+            highlight: false,
+          },
+          {
+            title: '優惠兩年方案',
+            badge: '免設定費',
+            price: '$36,000',
+            details: ['使用人數：1人＋贈2人，共3人', '現省 $6,000 設定費'],
+            highlight: false,
+          },
+          {
+            title: '優惠三年方案',
+            badge: '最推薦',
+            price: '$50,400',
+            details: ['免設定費、月費 -100', '使用人數：1人＋贈2人，共3人', '現省 $6,000 設定費、$3,600 月費'],
+            highlight: true,
+          },
+        ],
       },
       {
         id: newId(),
@@ -403,6 +432,56 @@ function blockToFlexContents(block: Block, accentColor: string): FlexContent[] {
               ],
             },
           ],
+        },
+      ];
+    }
+
+    case 'planList': {
+      const plans = block.plans.filter((p) => p.title.trim());
+      if (plans.length === 0) return [];
+      return [
+        {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'md',
+          contents: plans.map((p) => ({
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: p.highlight ? lightenColor(accentColor, 0.92) : '#F7F8FA',
+            cornerRadius: 'lg',
+            paddingAll: '14px',
+            spacing: 'xs',
+            ...(p.highlight ? { borderWidth: '2px', borderColor: accentColor } : {}),
+            contents: [
+              {
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  { type: 'text', text: p.title, weight: 'bold', size: 'md', color: '#111111', flex: 1, wrap: true },
+                  ...(p.badge.trim()
+                    ? [
+                        {
+                          type: 'box',
+                          layout: 'vertical',
+                          backgroundColor: accentColor,
+                          cornerRadius: '999px',
+                          paddingAll: '4px',
+                          paddingStart: '10px',
+                          paddingEnd: '10px',
+                          contents: [
+                            { type: 'text', text: p.badge, size: 'xxs', color: '#FFFFFF', weight: 'bold' },
+                          ],
+                        },
+                      ]
+                    : []),
+                ],
+              },
+              { type: 'text', text: p.price, size: 'xxl', weight: 'bold', color: accentColor, margin: 'sm' },
+              ...p.details
+                .filter((d) => d.trim())
+                .map((d) => ({ type: 'text', text: `・ ${d}`, size: 'xs', color: '#666666', wrap: true })),
+            ],
+          })),
         },
       ];
     }

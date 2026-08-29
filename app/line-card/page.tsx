@@ -414,6 +414,8 @@ function BlockEditor({
         </div>
       )}
 
+      {block.type === 'planList' && <PlanListEditor block={block} onChange={onChange} />}
+
       {block.type === 'slotList' && (
         <div className="flex flex-col gap-1.5">
           {block.slots.map((slot, i) => (
@@ -594,6 +596,113 @@ function HeroEditor({
   );
 }
 
+function PlanListEditor({
+  block,
+  onChange,
+}: {
+  block: Extract<Block, { type: 'planList' }>;
+  onChange: (updater: (block: Block) => Block) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {block.plans.map((plan, i) => (
+        <div key={i} className="flex flex-col gap-1.5 rounded-lg border border-gray-100 p-2">
+          <div className="flex gap-1.5">
+            <input
+              value={plan.title}
+              onChange={(e) =>
+                onChange((b) => {
+                  if (b.type !== 'planList') return b;
+                  const plans = [...b.plans];
+                  plans[i] = { ...plans[i], title: e.target.value };
+                  return { ...b, plans };
+                })
+              }
+              placeholder="方案名稱"
+              className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+            />
+            <input
+              value={plan.badge}
+              onChange={(e) =>
+                onChange((b) => {
+                  if (b.type !== 'planList') return b;
+                  const plans = [...b.plans];
+                  plans[i] = { ...plans[i], badge: e.target.value };
+                  return { ...b, plans };
+                })
+              }
+              placeholder="徽章（選填）"
+              className="w-24 text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+            />
+            <button
+              onClick={() =>
+                onChange((b) => (b.type === 'planList' ? { ...b, plans: b.plans.filter((_, j) => j !== i) } : b))
+              }
+              className="text-xs text-gray-300 hover:text-red-500 px-1"
+            >
+              ✕
+            </button>
+          </div>
+          <input
+            value={plan.price}
+            onChange={(e) =>
+              onChange((b) => {
+                if (b.type !== 'planList') return b;
+                const plans = [...b.plans];
+                plans[i] = { ...plans[i], price: e.target.value };
+                return { ...b, plans };
+              })
+            }
+            placeholder="價格，例如 $24,000"
+            className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400"
+          />
+          <textarea
+            value={plan.details.join('\n')}
+            onChange={(e) =>
+              onChange((b) => {
+                if (b.type !== 'planList') return b;
+                const plans = [...b.plans];
+                plans[i] = { ...plans[i], details: e.target.value.split('\n') };
+                return { ...b, plans };
+              })
+            }
+            placeholder="方案細節，一行一項"
+            rows={3}
+            className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 text-gray-900 bg-white placeholder:text-gray-400 resize-none"
+          />
+          <label className="flex items-center gap-1.5 text-xs text-gray-500">
+            <input
+              type="checkbox"
+              checked={plan.highlight}
+              onChange={(e) =>
+                onChange((b) => {
+                  if (b.type !== 'planList') return b;
+                  const plans = [...b.plans];
+                  plans[i] = { ...plans[i], highlight: e.target.checked };
+                  return { ...b, plans };
+                })
+              }
+            />
+            強調這個方案（加外框、淺色底）
+          </label>
+        </div>
+      ))}
+      <button
+        onClick={() =>
+          onChange((b) =>
+            b.type === 'planList'
+              ? { ...b, plans: [...b.plans, { title: '', badge: '', price: '$0', details: [''], highlight: false }] }
+              : b
+          )
+        }
+        className="text-xs text-gray-400 hover:text-gray-600 self-start"
+      >
+        ＋ 新增方案
+      </button>
+    </div>
+  );
+}
+
 function CardPreview({ blocks, accentColor }: { blocks: Block[]; accentColor: string }) {
   const header = blocks.find((b) => b.type === 'header');
   const hero = blocks.find((b) => b.type === 'hero' && b.imageUrl.trim());
@@ -660,6 +769,49 @@ function PreviewBlock({ block, accentColor }: { block: Block; accentColor: strin
             <span>總計</span>
             <span style={{ color: accentColor }}>${total.toLocaleString()}</span>
           </div>
+        </div>
+      );
+    }
+
+    case 'planList': {
+      const plans = block.plans.filter((p) => p.title.trim());
+      if (plans.length === 0) return null;
+      return (
+        <div className="flex flex-col gap-3">
+          {plans.map((p, i) => (
+            <div
+              key={i}
+              className="rounded-xl p-3"
+              style={{
+                backgroundColor: p.highlight ? lightenColor(accentColor, 0.92) : '#F7F8FA',
+                border: p.highlight ? `2px solid ${accentColor}` : undefined,
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-sm text-gray-900">{p.title}</span>
+                {p.badge.trim() && (
+                  <span
+                    className="text-[10px] font-bold text-white px-2 py-0.5 rounded-full shrink-0"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    {p.badge}
+                  </span>
+                )}
+              </div>
+              <p className="text-xl font-extrabold mt-1" style={{ color: accentColor }}>
+                {p.price}
+              </p>
+              <div className="mt-1 flex flex-col gap-0.5">
+                {p.details
+                  .filter((d) => d.trim())
+                  .map((d, j) => (
+                    <p key={j} className="text-[11px] text-gray-500">
+                      ・{d}
+                    </p>
+                  ))}
+              </div>
+            </div>
+          ))}
         </div>
       );
     }
