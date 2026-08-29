@@ -181,6 +181,52 @@ export const TEMPLATES: Template[] = [
     ],
   },
   {
+    id: 'demoConfirm',
+    label: '展示確認',
+    description: '線上展示預約成功的確認卡片',
+    blocks: () => [
+      { id: newId(), type: 'header', title: '🗓️ 線上展示預約成功' },
+      { id: newId(), type: 'text', text: '親愛的老闆您好，已為您安排線上展示' },
+      {
+        id: newId(),
+        type: 'infoRows',
+        rows: [
+          { label: '🕐 時間', value: '' },
+          { label: '👤 業務', value: '' },
+        ],
+      },
+      {
+        id: newId(),
+        type: 'text',
+        text: '📝 建議設備：\n建議使用電腦或平板參與，畫面較大且字體清晰，能獲得最佳展示體驗唷！將於展示前 5 分鐘發送會議連結，請留意訊息唷！',
+      },
+      {
+        id: newId(),
+        type: 'text',
+        text: '💡 重要提醒：\n若您預計使用手機參與，請先下載 Google Meet App，以確保連結能順利開啟唷！\n⬇️ 下方按鈕點擊可直接下載唷 ⬇️',
+      },
+      {
+        id: newId(),
+        type: 'buttons',
+        buttons: [
+          {
+            type: 'uri',
+            label: 'iOS 下載',
+            url: 'https://apps.apple.com/app/google-meet/id1013231476',
+            style: 'primary',
+          },
+          {
+            type: 'uri',
+            label: '安卓下載',
+            url: 'https://play.google.com/store/apps/details?id=com.google.android.apps.meetings',
+            style: 'primary',
+          },
+        ],
+      },
+      { id: newId(), type: 'footer', text: 'ezPretty 預約科技' },
+    ],
+  },
+  {
     id: 'blank',
     label: '空白卡片',
     description: '從空白開始，自己組區塊',
