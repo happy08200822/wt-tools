@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/session';
 import { calcCost, logAiUsage } from '@/app/lib/aiUsage';
 
 const GEMINI_MODEL = 'gemini-3.6-flash';
-const MAX_BYTES = 8 * 1024 * 1024; // 8MB，手機拍照的收據通常比合約 PDF 小
+const MAX_BYTES = 4 * 1024 * 1024; // 4MB，Vercel Serverless Function 的 request body 上限約 4.5MB（前端已先壓縮，這裡是防線）
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 const RESPONSE_SCHEMA = {
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '只支援 JPEG / PNG / WebP / HEIC 照片' }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: '照片太大，請上傳 8MB 以下的檔案' }, { status: 400 });
+    return NextResponse.json({ error: '照片太大，請上傳 4MB 以下的檔案' }, { status: 400 });
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
