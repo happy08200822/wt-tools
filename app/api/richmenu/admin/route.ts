@@ -9,6 +9,9 @@ import {
 import dbConnect from '@/lib/dbConnect';
 import ContractReview from '@/models/ContractReview';
 import AiUsageLog from '@/models/AiUsageLog';
+// 只是要註冊 User schema 給下面 .populate('user', ...) 用，這個檔案本身沒有直接用到 User model，
+// 但 Mongoose 需要 User model 先被載入過，不然 populate 會噴 MissingSchemaError
+import '@/models/User';
 
 async function getContractStats() {
   await dbConnect();
