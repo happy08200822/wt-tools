@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import AiUsageReportTab from './AiUsageReportTab';
 
-type Tab = 'users' | 'transactions' | 'posts';
+type Tab = 'users' | 'transactions' | 'posts' | 'aiUsage';
 
 type AdminUser = {
   _id: string;
@@ -39,6 +40,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'users', label: '使用者' },
   { id: 'transactions', label: '記帳紀錄' },
   { id: 'posts', label: '留言板文章' },
+  { id: 'aiUsage', label: 'AI 用量報表' },
 ];
 
 export default function AdminDashboard({ adminId }: { adminId: string }) {
@@ -50,6 +52,7 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
   const [error, setError] = useState('');
 
   async function loadTab(t: Tab) {
+    if (t === 'aiUsage') return; // 這個分頁自己管理資料，不用共用的載入邏輯
     setLoading(true);
     setError('');
     try {
@@ -325,6 +328,8 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
           ))}
         </div>
       )}
+
+      {tab === 'aiUsage' && <AiUsageReportTab />}
     </main>
   );
 }
