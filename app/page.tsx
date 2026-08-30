@@ -103,6 +103,14 @@ const TOOLS = [
     desc: "上傳合約 PDF，Gemini 找出風險條款並給修改建議，結果存進 MongoDB。",
     gradient: "from-slate-500 to-slate-800",
   },
+  {
+    href: "/receipts",
+    emoji: "🧾",
+    tag: "AI 分析",
+    title: "收據辨識",
+    desc: "上傳收據照片，Gemini 拆解廠商/日期/品項明細，一鍵複製貼上 Excel。",
+    gradient: "from-amber-500 to-orange-700",
+  },
 ];
 
 export default async function Home() {
