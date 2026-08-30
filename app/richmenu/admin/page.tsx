@@ -41,6 +41,28 @@ type ContractLogEntry = {
   user?: { name: string; email: string } | null;
 };
 
+type AiFeatureStat = {
+  feature: string;
+  userId: string;
+  name: string;
+  email?: string;
+  count: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+};
+
+type AiUsageLogEntry = {
+  _id: string;
+  feature: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  createdAt: string;
+  user?: { name: string; email: string } | null;
+};
+
 export default function RichMenuAdminPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,6 +71,8 @@ export default function RichMenuAdminPage() {
   const [log, setLog] = useState<LogEntry[] | null>(null);
   const [contractUsers, setContractUsers] = useState<ContractUserStat[] | null>(null);
   const [contractLog, setContractLog] = useState<ContractLogEntry[] | null>(null);
+  const [aiFeatureStats, setAiFeatureStats] = useState<AiFeatureStat[] | null>(null);
+  const [aiUsageLog, setAiUsageLog] = useState<AiUsageLogEntry[] | null>(null);
 
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
@@ -67,6 +91,7 @@ export default function RichMenuAdminPage() {
       users: UserUsage[];
       log: LogEntry[];
       contracts: { byUser: ContractUserStat[]; recent: ContractLogEntry[] };
+      aiUsage: { byFeature: AiFeatureStat[]; recent: AiUsageLogEntry[] };
     };
   }
 
@@ -79,6 +104,8 @@ export default function RichMenuAdminPage() {
       setLog(data.log);
       setContractUsers(data.contracts.byUser);
       setContractLog(data.contracts.recent);
+      setAiFeatureStats(data.aiUsage.byFeature);
+      setAiUsageLog(data.aiUsage.recent);
     } catch (err) {
       setError(err instanceof Error ? err.message : '讀取失敗');
     } finally {
@@ -330,6 +357,92 @@ export default function RichMenuAdminPage() {
                     </td>
                     <td className="py-1.5 pr-3 text-slate-600 truncate max-w-[160px]">{l.fileName}</td>
                     <td className="py-1.5 pr-3 text-slate-700">{l.riskLevel}</td>
+                    <td className="py-1.5 pr-3 text-slate-700">
+                      {l.inputTokens.toLocaleString()} / {l.outputTokens.toLocaleString()}
+                    </td>
+                    <td className="py-1.5 pr-3 text-slate-700">${l.costUsd.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {aiFeatureStats && (
+        <div className="w-full max-w-3xl bg-white rounded-2xl shadow p-5 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-slate-600">其他 AI 功能花費（依功能／使用者）</p>
+          {(() => {
+            const totalCost = aiFeatureStats.reduce((sum, s) => sum + s.costUsd, 0);
+            const totalCount = aiFeatureStats.reduce((sum, s) => sum + s.count, 0);
+            return (
+              <p className="text-sm text-slate-500">
+                總計：{totalCount} 次使用 ・ ${totalCost.toFixed(4)} USD（約 NT{(totalCost * 31.5).toFixed(1)}）
+              </p>
+            );
+          })()}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-200">
+                  <th className="py-2 pr-4">功能</th>
+                  <th className="py-2 pr-4">使用者</th>
+                  <th className="py-2 pr-4">次數</th>
+                  <th className="py-2 pr-4">Input tokens</th>
+                  <th className="py-2 pr-4">Output tokens</th>
+                  <th className="py-2 pr-4">花費 (USD)</th>
+                  <th className="py-2 pr-4">花費 (約 NT$)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {aiFeatureStats.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-4 text-center text-slate-400">
+                      目前還沒有其他 AI 功能的使用紀錄
+                    </td>
+                  </tr>
+                )}
+                {aiFeatureStats.map((s, i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="py-2 pr-4 font-semibold text-slate-800">{s.feature}</td>
+                    <td className="py-2 pr-4 text-slate-500">{s.name}</td>
+                    <td className="py-2 pr-4 text-slate-700">{s.count}</td>
+                    <td className="py-2 pr-4 text-slate-700">{s.inputTokens.toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-slate-700">{s.outputTokens.toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-slate-700">${s.costUsd.toFixed(4)}</td>
+                    <td className="py-2 pr-4 text-slate-700">NT${(s.costUsd * 31.5).toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {aiUsageLog && aiUsageLog.length > 0 && (
+        <div className="w-full max-w-3xl bg-white rounded-2xl shadow p-5 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-slate-600">最近其他 AI 功能使用紀錄（最多 50 筆）</p>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-200">
+                  <th className="py-1.5 pr-3">時間</th>
+                  <th className="py-1.5 pr-3">功能</th>
+                  <th className="py-1.5 pr-3">使用者</th>
+                  <th className="py-1.5 pr-3">Tokens (in/out)</th>
+                  <th className="py-1.5 pr-3">花費</th>
+                </tr>
+              </thead>
+              <tbody>
+                {aiUsageLog.map((l) => (
+                  <tr key={l._id} className="border-b border-slate-100">
+                    <td className="py-1.5 pr-3 text-slate-500">
+                      {new Date(l.createdAt).toLocaleString('zh-TW')}
+                    </td>
+                    <td className="py-1.5 pr-3 text-slate-700">{l.feature}</td>
+                    <td className="py-1.5 pr-3 text-slate-800 font-medium">
+                      {l.user?.name ?? '（已刪除）'}
+                    </td>
                     <td className="py-1.5 pr-3 text-slate-700">
                       {l.inputTokens.toLocaleString()} / {l.outputTokens.toLocaleString()}
                     </td>

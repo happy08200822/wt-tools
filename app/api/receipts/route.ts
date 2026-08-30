@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
+import { calcCost, logAiUsage } from '@/app/lib/aiUsage';
 
 const GEMINI_MODEL = 'gemini-3.6-flash';
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB，手機拍照的收據通常比合約 PDF 小
@@ -100,7 +101,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Gemini API 沒有回傳有效內容' }, { status: 502 });
     }
 
-    return NextResponse.json(JSON.parse(text));
+    const usage = data?.usageMetadata ?? {};
+    const inputTokens = usage.promptTokenCount ?? 0;
+    const outputTokens = usage.candidatesTokenCount ?? 0;
+    const costUsd = calcCost(inputTokens, outputTokens);
+
+    await logAiUsage({
+      userId: currentUser._id,
+      feature: 'receipts',
+      model: GEMINI_MODEL,
+      inputTokens,
+      outputTokens,
+      costUsd,
+    });
+
+    return NextResponse.json({ ...JSON.parse(text), usage: { inputTokens, outputTokens, costUsd } });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : '辨識失敗，請稍後再試' },

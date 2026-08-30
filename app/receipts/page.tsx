@@ -3,7 +3,8 @@
 import { useState } from 'react';
 
 type Item = { name: string; unitPrice: number; unit: string; quantity: number; itemTotal: number };
-type Receipt = { date: string; vendor: string; receiptTotal: number; items: Item[] };
+type Usage = { inputTokens: number; outputTokens: number; costUsd: number };
+type Receipt = { date: string; vendor: string; receiptTotal: number; items: Item[]; usage?: Usage };
 
 export default function ReceiptsPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -217,6 +218,16 @@ export default function ReceiptsPage() {
           <p className="text-[11px] text-gray-400 text-center -mt-2">
             複製格式對應欄位：進貨日期／品項／單價／單位／數量／總額／單據總額／是否支付／支付日期
           </p>
+
+          {receipt.usage && (
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+              <span>輸入 {receipt.usage.inputTokens.toLocaleString()} tokens</span>
+              <span>輸出 {receipt.usage.outputTokens.toLocaleString()} tokens</span>
+              <span>
+                預估花費：${receipt.usage.costUsd.toFixed(4)} USD（約 NT${(receipt.usage.costUsd * 31.5).toFixed(1)}）
+              </span>
+            </div>
+          )}
         </div>
       )}
     </main>

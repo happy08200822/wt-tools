@@ -8,6 +8,7 @@ import {
 } from '@/app/lib/richmenuUsers';
 import dbConnect from '@/lib/dbConnect';
 import ContractReview from '@/models/ContractReview';
+import AiUsageLog from '@/models/AiUsageLog';
 
 async function getContractStats() {
   await dbConnect();
@@ -50,6 +51,49 @@ async function getContractStats() {
   return { byUser, recent };
 }
 
+// 給沒有自己專屬資料表的 AI 功能（例如收據辨識）彙總用量，依 feature 分組
+async function getAiUsageLogStats() {
+  await dbConnect();
+
+  const byFeature = await AiUsageLog.aggregate([
+    {
+      $group: {
+        _id: { feature: '$feature', user: '$user' },
+        count: { $sum: 1 },
+        inputTokens: { $sum: '$inputTokens' },
+        outputTokens: { $sum: '$outputTokens' },
+        costUsd: { $sum: '$costUsd' },
+      },
+    },
+    {
+      $lookup: { from: 'users', localField: '_id.user', foreignField: '_id', as: 'user' },
+    },
+    { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 0,
+        feature: '$_id.feature',
+        userId: '$_id.user',
+        name: { $ifNull: ['$user.name', '（已刪除的使用者）'] },
+        email: '$user.email',
+        count: 1,
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: 1,
+      },
+    },
+    { $sort: { costUsd: -1 } },
+  ]);
+
+  const recent = await AiUsageLog.find()
+    .select('feature model inputTokens outputTokens costUsd createdAt user')
+    .populate('user', 'name email')
+    .sort({ createdAt: -1 })
+    .limit(50);
+
+  return { byFeature, recent };
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
@@ -74,11 +118,12 @@ export async function POST(request: Request) {
     await removeUser(code);
   }
 
-  const [users, log, contracts] = await Promise.all([
+  const [users, log, contracts, aiUsage] = await Promise.all([
     getAllUsage(),
     getRecentLog(50),
     getContractStats(),
+    getAiUsageLogStats(),
   ]);
 
-  return NextResponse.json({ users, log, contracts });
+  return NextResponse.json({ users, log, contracts, aiUsage });
 }
