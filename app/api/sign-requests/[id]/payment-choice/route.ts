@@ -4,11 +4,13 @@ import dbConnect from '@/lib/dbConnect';
 import SignRequest from '@/models/SignRequest';
 import User from '@/models/User';
 import { pushLineMessage } from '@/app/lib/linePush';
+import { ATM_TRANSFER_LIMIT } from '@/app/lib/paymentConfig';
 
 type Params = { params: Promise<{ id: string }> };
 
 const CHOICE_LABEL: Record<string, string> = {
   transfer: '匯款',
+  atm: 'ATM 虛擬帳號',
   card: '刷卡',
 };
 
@@ -23,7 +25,7 @@ export async function POST(request: Request, { params }: Params) {
 
   const body = await request.json().catch(() => null);
   const choice = body?.choice;
-  if (choice !== 'transfer' && choice !== 'card') {
+  if (choice !== 'transfer' && choice !== 'atm' && choice !== 'card') {
     return NextResponse.json({ error: '付款方式格式不正確' }, { status: 400 });
   }
 
@@ -36,6 +38,18 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: '請先完成簽署' }, { status: 400 });
   }
 
+  // ATM 轉帳本身在銀行端有金額上限，達到門檻的金額客戶用 ATM 根本轉不出去，
+  // 所以達門檻只能選匯款；反過來未達門檻的金額公司政策不收直接匯款，只能選 ATM 或刷卡。
+  // UI 上本來就只會顯示合法的選項，這裡是防止有人繞過畫面直接打 API
+  if (typeof signRequest.paymentAmount === 'number') {
+    if (choice === 'atm' && signRequest.paymentAmount >= ATM_TRANSFER_LIMIT) {
+      return NextResponse.json({ error: '此金額超過 ATM 轉帳上限，請改選匯款' }, { status: 400 });
+    }
+    if (choice === 'transfer' && signRequest.paymentAmount < ATM_TRANSFER_LIMIT) {
+      return NextResponse.json({ error: '此金額請選擇 ATM 或刷卡付款' }, { status: 400 });
+    }
+  }
+
   signRequest.paymentChoice = choice;
   signRequest.paymentChosenAt = new Date();
   await signRequest.save();
@@ -45,7 +59,7 @@ export async function POST(request: Request, { params }: Params) {
     const label = signRequest.customerName || '客戶';
     await pushLineMessage(
       owner.lineUserId,
-      `💰 「${label}」選擇了「${CHOICE_LABEL[choice]}」付款方式${choice === 'card' ? '，記得去後台幫他開通刷卡連結' : ''}`
+      `💰 「${label}」選擇了「${CHOICE_LABEL[choice]}」付款方式${choice !== 'transfer' ? '，記得去後台幫他開通' : ''}`
     );
   }
 

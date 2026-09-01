@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import CopyLinkButton from '@/app/components/CopyLinkButton';
+import { ATM_TRANSFER_LIMIT } from '@/app/lib/paymentConfig';
 
 type SignHistoryEntry = {
   signedAt: string;
@@ -22,12 +23,13 @@ type SignRequestItem = {
   signedFileUrl?: string;
   signHistory?: SignHistoryEntry[];
   paymentAmount?: number;
-  paymentChoice?: 'transfer' | 'card';
+  paymentChoice?: 'transfer' | 'atm' | 'card';
   createdAt: string;
 };
 
 const PAYMENT_CHOICE_LABEL: Record<string, string> = {
-  transfer: '💰 已選擇：匯款',
+  transfer: '🏦 已選擇：匯款',
+  atm: '🏧 已選擇：ATM 虛擬帳號',
   card: '💳 已選擇：刷卡',
 };
 
@@ -365,9 +367,16 @@ export default function SignRequestsPage() {
               min={0}
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
-              placeholder="收款金額（選填，填了才會在簽署完成頁讓客戶選匯款或刷卡）"
+              placeholder="收款金額（選填，填了才會在簽署完成頁讓客戶選付款方式）"
               className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-400"
             />
+            {paymentAmount !== '' && (
+              <p className="-mt-2 text-[11px] text-slate-400">
+                {Number(paymentAmount) >= ATM_TRANSFER_LIMIT
+                  ? `金額 $${Number(paymentAmount).toLocaleString()} 已達 $${ATM_TRANSFER_LIMIT.toLocaleString()}，客戶只會看到「匯款」跟「刷卡」`
+                  : `金額 $${Number(paymentAmount).toLocaleString()} 未滿 $${ATM_TRANSFER_LIMIT.toLocaleString()}，客戶只會看到「ATM 虛擬帳號」跟「刷卡」`}
+              </p>
+            )}
             <input
               ref={fileInputRef}
               type="file"

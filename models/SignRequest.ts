@@ -36,9 +36,10 @@ const SignRequestSchema = new Schema(
     signedFileSize: { type: Number, default: 0 },
     signHistory: { type: [SignHistoryEntrySchema], default: [] },
     // 老闆建立請求時填的收款金額（選填）。有填才會在簽署完成頁讓客戶選付款方式；
-    // 客戶選了之後才知道要匯款還是刷卡，這個選擇本身也是老闆判斷客戶付款意願的參考
+    // 客戶選了之後才知道要匯款、ATM 還是刷卡，這個選擇本身也是老闆判斷客戶付款意願的參考。
+    // atm/transfer 只會有一個依金額門檻顯示給客戶選（見 app/lib/paymentConfig.ts），不會同時出現
     paymentAmount: { type: Number },
-    paymentChoice: { type: String, enum: ['transfer', 'card'] },
+    paymentChoice: { type: String, enum: ['transfer', 'atm', 'card'] },
     paymentChosenAt: { type: Date },
   },
   { timestamps: true }

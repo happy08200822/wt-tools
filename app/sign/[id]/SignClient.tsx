@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import SignaturePad from 'signature_pad';
+import { ATM_TRANSFER_LIMIT } from '@/app/lib/paymentConfig';
 
 type SignInfo = {
   fileName: string;
@@ -11,17 +12,20 @@ type SignInfo = {
   signedAt?: string;
   signedFileUrl?: string;
   paymentAmount?: number;
-  paymentChoice?: 'transfer' | 'card';
+  paymentChoice?: 'transfer' | 'atm' | 'card';
 };
 
-// 公司固定收款帳戶，跟金額無關的部分寫死在這裡，帳戶真的換了再改這裡就好
-const BANK_ACCOUNT_NUMBER = '2068-01-8000262-2';
+// 公司固定收款帳戶，跟金額無關的部分寫死在這裡，帳戶真的換了再改這裡就好。
+// 畫面顯示保留「-」比較好讀，但複製帳號要用純數字，貼到不同銀行的網銀系統才不會因為
+// 帳號欄位只吃數字、把「-」也算進字數而截斷或直接被拒絕
+const BANK_ACCOUNT_NUMBER_DISPLAY = '2068-01-8000262-2';
+const BANK_ACCOUNT_NUMBER_RAW = BANK_ACCOUNT_NUMBER_DISPLAY.replace(/-/g, '');
 const BANK_TRANSFER_INFO = `[匯款帳號]
 台新國際商業銀行
 
 銀行代號：812
 機構代碼：0687
-銀行帳號：${BANK_ACCOUNT_NUMBER}
+銀行帳號：${BANK_ACCOUNT_NUMBER_DISPLAY}
 機構名稱：建北分行
 帳戶名：預約科技行銷股份有限公司`;
 
@@ -341,7 +345,7 @@ export default function SignClient({ id }: { id: string }) {
 
   const [showContractModal, setShowContractModal] = useState(false);
 
-  const [paymentChoice, setPaymentChoice] = useState<'transfer' | 'card' | null>(null);
+  const [paymentChoice, setPaymentChoice] = useState<'transfer' | 'atm' | 'card' | null>(null);
   const [choosingPayment, setChoosingPayment] = useState(false);
   const [paymentChoiceError, setPaymentChoiceError] = useState('');
   const [copiedField, setCopiedField] = useState<'account' | 'full' | null>(null);
@@ -403,7 +407,7 @@ export default function SignClient({ id }: { id: string }) {
     }
   }
 
-  async function handlePaymentChoice(choice: 'transfer' | 'card') {
+  async function handlePaymentChoice(choice: 'transfer' | 'atm' | 'card') {
     setChoosingPayment(true);
     setPaymentChoiceError('');
     try {
@@ -478,14 +482,25 @@ export default function SignClient({ id }: { id: string }) {
                 <p className="text-center text-sm font-bold text-slate-800">請問您想使用哪一種付款方式？</p>
                 {paymentChoiceError && <p className="text-center text-sm text-red-500">{paymentChoiceError}</p>}
                 <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handlePaymentChoice('transfer')}
-                    disabled={choosingPayment}
-                    className="flex-1 rounded-2xl border-2 border-slate-200 py-4 text-center text-sm font-bold text-slate-700 transition-colors hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50"
-                  >
-                    <span className="block text-xl">🏦</span>我要匯款
-                  </button>
+                  {amount >= ATM_TRANSFER_LIMIT ? (
+                    <button
+                      type="button"
+                      onClick={() => handlePaymentChoice('transfer')}
+                      disabled={choosingPayment}
+                      className="flex-1 rounded-2xl border-2 border-slate-200 py-4 text-center text-sm font-bold text-slate-700 transition-colors hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50"
+                    >
+                      <span className="block text-xl">🏦</span>我要匯款
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handlePaymentChoice('atm')}
+                      disabled={choosingPayment}
+                      className="flex-1 rounded-2xl border-2 border-slate-200 py-4 text-center text-sm font-bold text-slate-700 transition-colors hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50"
+                    >
+                      <span className="block text-xl">🏧</span>ATM 虛擬帳號
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handlePaymentChoice('card')}
@@ -508,7 +523,7 @@ export default function SignClient({ id }: { id: string }) {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => handleCopy('account', BANK_ACCOUNT_NUMBER)}
+                      onClick={() => handleCopy('account', BANK_ACCOUNT_NUMBER_RAW)}
                       className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
                     >
                       {copiedField === 'account' ? '已複製 ✓' : '複製帳號'}
@@ -533,7 +548,11 @@ export default function SignClient({ id }: { id: string }) {
             ) : (
               <>
                 <p className="text-sm font-bold text-slate-800">已收到您的付款方式！</p>
-                <p className="text-sm text-slate-600">我們會盡快為您開通信用卡付款連結，請留意後續通知。</p>
+                <p className="text-sm text-slate-600">
+                  {paymentChoice === 'atm'
+                    ? '我們會盡快為您提供 ATM 虛擬帳號，請留意後續通知。'
+                    : '我們會盡快為您開通信用卡付款連結，請留意後續通知。'}
+                </p>
                 <button
                   type="button"
                   onClick={() => setPaymentChoice(null)}
