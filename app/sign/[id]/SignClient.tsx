@@ -10,7 +10,19 @@ type SignInfo = {
   status: 'pending' | 'signed';
   signedAt?: string;
   signedFileUrl?: string;
+  paymentAmount?: number;
+  paymentChoice?: 'transfer' | 'card';
 };
+
+// 公司固定收款帳戶，跟金額無關的部分寫死在這裡，帳戶真的換了再改這裡就好
+const BANK_TRANSFER_INFO = `[匯款帳號]
+台新國際商業銀行
+
+銀行代號：812
+機構代碼：0687
+銀行帳號：2068-01-8000262-2
+機構名稱：建北分行
+帳戶名：預約科技行銷股份有限公司`;
 
 // 只截取畫布上實際有簽名筆跡的最小範圍，四周空白全部裁掉。
 // 簽名畫布現在是全螢幕直向的（手機直立時上下幾乎佔滿螢幕），但老闆在合約上框的簽名區塊通常是扁的
@@ -88,6 +100,82 @@ function buildAttestationImage(signatureCanvas: HTMLCanvasElement): string {
   return composite.toDataURL('image/png');
 }
 
+// 把一份 PDF 的每一頁自己渲染成圖片（用 pdfjs-dist），不用瀏覽器內建的 PDF 檢視器，
+// 因為工具列、縮圖側欄在手機上又雜又不穩定。讀合約頁跟「查看已簽署合約」彈窗共用這個函式。
+async function renderPdfPagesToImages(fileUrl: string): Promise<string[]> {
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
+  const res = await fetch(fileUrl);
+  if (!res.ok) throw new Error('無法讀取合約檔案');
+  const buffer = await res.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+  const containerWidth = Math.min(window.innerWidth - 32, 640);
+  // 手機螢幕的實際像素密度通常是 2~3 倍，只照 CSS 寬度渲染會讓圖片顯示時被放大、變模糊，
+  // 渲染解析度要乘上 devicePixelRatio 才會清晰（上限 3 避免超大合約在手機上太吃記憶體）
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 3);
+  const images: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = (containerWidth / baseViewport.width) * pixelRatio;
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+    await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+    images.push(canvas.toDataURL('image/png'));
+  }
+  return images;
+}
+
+// 鎖住背景頁面捲動：用 position: fixed 把 body 固定住，這比單純 overflow:hidden 在 iOS Safari
+// 上更可靠。overscroll-behavior: none 是因為 LINE／IG 之類的內建瀏覽器常常是靠「頁面拉到底
+// 還往下拉（overscroll/彈性回彈）」這個訊號判斷要不要把整個瀏覽器關掉，明確關掉這個回彈行為
+// 可以減少被誤判成「使用者要滑掉」的機率。
+// blockAllTouchMove 只給簽名彈窗用（整個彈窗都是簽名區，沒有東西需要捲動，可以全擋當最後一道防線）；
+// 合約檢視彈窗裡面要能正常捲動看多頁合約，不能整個擋掉，改靠內層的 overscroll-contain 處理。
+function useLockBodyScroll(blockAllTouchMove: boolean) {
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const html = document.documentElement;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      bodyOverscroll: body.style.overscrollBehavior,
+      htmlOverscroll: html.style.overscrollBehavior,
+    };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    body.style.overscrollBehavior = 'none';
+    html.style.overscrollBehavior = 'none';
+
+    const blockTouchMove = (e: TouchEvent) => e.preventDefault();
+    if (blockAllTouchMove) {
+      document.addEventListener('touchmove', blockTouchMove, { passive: false });
+    }
+
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.width = prev.width;
+      body.style.overscrollBehavior = prev.bodyOverscroll;
+      html.style.overscrollBehavior = prev.htmlOverscroll;
+      if (blockAllTouchMove) {
+        document.removeEventListener('touchmove', blockTouchMove);
+      }
+      window.scrollTo(0, scrollY);
+    };
+  }, [blockAllTouchMove]);
+}
+
 // 簽名用全螢幕彈窗，跟合約內容頁完全分開。
 // 這樣不管手指怎麼滑（包含滑出簽名畫布以外的地方）都不會牽動到背景的合約捲動，
 // 因為彈窗開著的時候背景本身就被鎖死、滑不動。
@@ -106,44 +194,7 @@ function SignatureModal({
   const padRef = useRef<SignaturePad | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
 
-  // 鎖住背景頁面捲動：用 position: fixed 把 body 固定住，這比單純 overflow:hidden
-  // 在 iOS Safari 上更可靠（overflow:hidden 有時候擋不住 bounce/rubber-band 捲動）
-  useEffect(() => {
-    const scrollY = window.scrollY;
-    const body = document.body;
-    const html = document.documentElement;
-    const prev = {
-      position: body.style.position,
-      top: body.style.top,
-      width: body.style.width,
-      bodyOverscroll: body.style.overscrollBehavior,
-      htmlOverscroll: html.style.overscrollBehavior,
-    };
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.width = '100%';
-    // LINE／IG 之類的內建瀏覽器常常是靠「頁面拉到底還往下拉（overscroll/彈性回彈）」
-    // 這個訊號來判斷要不要關閉整個瀏覽器，跟網頁本身有沒有捲動無關。
-    // overscroll-behavior: none 明確告訴瀏覽器不要做這個回彈動作，減少被誤判成「使用者要滑掉」的機率
-    body.style.overscrollBehavior = 'none';
-    html.style.overscrollBehavior = 'none';
-
-    // 有些內嵌瀏覽器的關閉手勢是看網頁有沒有對 touchmove 呼叫 preventDefault 來判斷
-    // 「這個手勢網頁自己要處理」，這裡全域擋一次當作最後一道防線（彈窗開著時整個畫面都是簽名視窗，
-    // 不會有其他東西需要捲動，擋掉不影響任何功能）
-    const blockTouchMove = (e: TouchEvent) => e.preventDefault();
-    document.addEventListener('touchmove', blockTouchMove, { passive: false });
-
-    return () => {
-      body.style.position = prev.position;
-      body.style.top = prev.top;
-      body.style.width = prev.width;
-      body.style.overscrollBehavior = prev.bodyOverscroll;
-      html.style.overscrollBehavior = prev.htmlOverscroll;
-      document.removeEventListener('touchmove', blockTouchMove);
-      window.scrollTo(0, scrollY);
-    };
-  }, []);
+  useLockBodyScroll(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -220,6 +271,64 @@ function SignatureModal({
   );
 }
 
+// 查看合約用的懸浮視窗，取代原本開新分頁用瀏覽器內建 PDF 檢視器的做法（手機上不穩定）。
+// 跟簽名彈窗共用同一套背景鎖定，但內容區塊本身要能正常上下捲動看多頁合約。
+function ContractViewerModal({ title, fileUrl, onClose }: { title: string; fileUrl: string; onClose: () => void }) {
+  const [images, setImages] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useLockBodyScroll(false);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const imgs = await renderPdfPagesToImages(fileUrl);
+        setImages(imgs);
+      } catch {
+        setError('無法預覽這份合約，請改用下方連結另外開啟');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [fileUrl]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-100">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+        <p className="text-sm font-bold text-slate-800">{title}</p>
+        <button type="button" onClick={onClose} className="text-sm text-slate-400 hover:text-slate-600">
+          關閉 ✕
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4">
+        {loading && <p className="py-10 text-center text-sm text-slate-400">合約讀取中...</p>}
+        {error && (
+          <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-2xl bg-white p-6 text-center shadow-sm">
+            <p className="text-sm text-red-500">{error}</p>
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-semibold text-indigo-600 underline"
+            >
+              另開合約檔案
+            </a>
+          </div>
+        )}
+        <div className="mx-auto flex max-w-2xl flex-col gap-3">
+          {images.map((src, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={i} src={src} alt={`合約第 ${i + 1} 頁`} className="w-full rounded-2xl bg-white shadow-sm" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SignClient({ id }: { id: string }) {
   const [info, setInfo] = useState<SignInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -229,8 +338,14 @@ export default function SignClient({ id }: { id: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  // 合約每一頁自己渲染成圖片直接嵌在頁面裡（用 pdfjs-dist），
-  // 不用瀏覽器內建的 PDF 檢視器，因為工具列、縮圖側欄在手機上又雜又不穩定
+  const [showContractModal, setShowContractModal] = useState(false);
+
+  const [paymentChoice, setPaymentChoice] = useState<'transfer' | 'card' | null>(null);
+  const [choosingPayment, setChoosingPayment] = useState(false);
+  const [paymentChoiceError, setPaymentChoiceError] = useState('');
+  const [bankInfoCopied, setBankInfoCopied] = useState(false);
+
+  // 合約每一頁自己渲染成圖片直接嵌在頁面裡
   const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
   const [pdfLoading, setPdfLoading] = useState(true);
   const [pdfError, setPdfError] = useState('');
@@ -242,6 +357,7 @@ export default function SignClient({ id }: { id: string }) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || '讀取失敗');
         setInfo(data);
+        if (data.paymentChoice) setPaymentChoice(data.paymentChoice);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : '讀取失敗');
       } finally {
@@ -256,33 +372,7 @@ export default function SignClient({ id }: { id: string }) {
       setPdfLoading(true);
       setPdfError('');
       try {
-        const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-
-        const res = await fetch(info.fileUrl);
-        if (!res.ok) throw new Error('無法讀取合約檔案');
-        const buffer = await res.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-
-        const containerWidth = Math.min(window.innerWidth - 32, 640);
-        // 手機螢幕的實際像素密度通常是 2~3 倍，只照 CSS 寬度渲染會讓圖片顯示時被放大、變模糊，
-        // 渲染解析度要乘上 devicePixelRatio 才會清晰（上限 3 避免超大合約在手機上太吃記憶體）
-        const pixelRatio = Math.min(window.devicePixelRatio || 1, 3);
-        const images: string[] = [];
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const baseViewport = page.getViewport({ scale: 1 });
-          const scale = (containerWidth / baseViewport.width) * pixelRatio;
-          const viewport = page.getViewport({ scale });
-
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) continue;
-          await page.render({ canvas, canvasContext: ctx, viewport }).promise;
-          images.push(canvas.toDataURL('image/png'));
-        }
+        const images = await renderPdfPagesToImages(info.fileUrl);
         setPdfPageImages(images);
       } catch {
         setPdfError('無法預覽這份合約內容，可以先另開檔案確認內容後再回來簽名');
@@ -312,6 +402,36 @@ export default function SignClient({ id }: { id: string }) {
     }
   }
 
+  async function handlePaymentChoice(choice: 'transfer' | 'card') {
+    setChoosingPayment(true);
+    setPaymentChoiceError('');
+    try {
+      const res = await fetch(`/api/sign-requests/${id}/payment-choice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ choice }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '送出失敗');
+      setPaymentChoice(choice);
+    } catch (err) {
+      setPaymentChoiceError(err instanceof Error ? err.message : '送出失敗');
+    } finally {
+      setChoosingPayment(false);
+    }
+  }
+
+  async function handleCopyBankInfo(amount: number) {
+    const text = `ezPretty 預計與您收取 $${amount.toLocaleString()}，再麻煩匯款後，提供匯款後五碼呦🙆\n\n${BANK_TRANSFER_INFO}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // 環境不支援剪貼簿也不擋主要流程
+    }
+    setBankInfoCopied(true);
+    setTimeout(() => setBankInfoCopied(false), 1500);
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-slate-100">
@@ -329,9 +449,10 @@ export default function SignClient({ id }: { id: string }) {
   }
 
   if (info.status === 'signed') {
+    const amount = info.paymentAmount;
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-100 p-8 text-center">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 flex flex-col items-center gap-3">
+      <main className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-100 p-4 py-8 sm:p-8">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 flex flex-col items-center gap-3 text-center">
           <span className="text-4xl">✅</span>
           <h1 className="text-xl font-bold text-slate-800">已完成簽署</h1>
           {info.signedAt && (
@@ -340,16 +461,89 @@ export default function SignClient({ id }: { id: string }) {
             </p>
           )}
           {info.signedFileUrl && (
-            <a
-              href={info.signedFileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() => setShowContractModal(true)}
               className="mt-2 text-sm font-semibold text-indigo-600 underline"
             >
               查看已簽署的合約
-            </a>
+            </button>
           )}
         </div>
+
+        {typeof amount === 'number' && (
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 flex flex-col gap-3">
+            {!paymentChoice ? (
+              <>
+                <p className="text-center text-sm font-bold text-slate-800">請問您想使用哪一種付款方式？</p>
+                {paymentChoiceError && <p className="text-center text-sm text-red-500">{paymentChoiceError}</p>}
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handlePaymentChoice('transfer')}
+                    disabled={choosingPayment}
+                    className="flex-1 rounded-2xl border-2 border-slate-200 py-4 text-center text-sm font-bold text-slate-700 transition-colors hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    <span className="block text-xl">🏦</span>我要匯款
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePaymentChoice('card')}
+                    disabled={choosingPayment}
+                    className="flex-1 rounded-2xl border-2 border-slate-200 py-4 text-center text-sm font-bold text-slate-700 transition-colors hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    <span className="block text-xl">💳</span>我要刷卡
+                  </button>
+                </div>
+              </>
+            ) : paymentChoice === 'transfer' ? (
+              <>
+                <p className="text-sm font-bold text-slate-800">
+                  ezPretty 預計與您收取 ${amount.toLocaleString()}，再麻煩匯款後，提供匯款後五碼呦🙆
+                </p>
+                <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3 font-sans text-xs text-slate-600">
+                  {BANK_TRANSFER_INFO}
+                </pre>
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyBankInfo(amount)}
+                    className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+                  >
+                    {bankInfoCopied ? '已複製 ✓' : '複製匯款資訊'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentChoice(null)}
+                    className="text-xs text-slate-400 underline hover:text-slate-600"
+                  >
+                    選錯了？重新選擇
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-bold text-slate-800">已收到您的付款方式！</p>
+                <p className="text-sm text-slate-600">我們會盡快為您開通信用卡付款連結，請留意後續通知。</p>
+                <button
+                  type="button"
+                  onClick={() => setPaymentChoice(null)}
+                  className="self-center text-xs text-slate-400 underline hover:text-slate-600"
+                >
+                  選錯了？重新選擇
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {showContractModal && info.signedFileUrl && (
+          <ContractViewerModal
+            title="已簽署的合約"
+            fileUrl={info.signedFileUrl}
+            onClose={() => setShowContractModal(false)}
+          />
+        )}
       </main>
     );
   }

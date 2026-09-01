@@ -35,6 +35,11 @@ const SignRequestSchema = new Schema(
     signedFileUrl: { type: String, default: '' },
     signedFileSize: { type: Number, default: 0 },
     signHistory: { type: [SignHistoryEntrySchema], default: [] },
+    // 老闆建立請求時填的收款金額（選填）。有填才會在簽署完成頁讓客戶選付款方式；
+    // 客戶選了之後才知道要匯款還是刷卡，這個選擇本身也是老闆判斷客戶付款意願的參考
+    paymentAmount: { type: Number },
+    paymentChoice: { type: String, enum: ['transfer', 'card'] },
+    paymentChosenAt: { type: Date },
   },
   { timestamps: true }
 );

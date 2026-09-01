@@ -21,7 +21,14 @@ type SignRequestItem = {
   signedAt?: string;
   signedFileUrl?: string;
   signHistory?: SignHistoryEntry[];
+  paymentAmount?: number;
+  paymentChoice?: 'transfer' | 'card';
   createdAt: string;
+};
+
+const PAYMENT_CHOICE_LABEL: Record<string, string> = {
+  transfer: '💰 已選擇：匯款',
+  card: '💳 已選擇：刷卡',
 };
 
 const STATUS_LABEL: Record<string, { label: string; className: string }> = {
@@ -77,6 +84,7 @@ function signUrl(id: string) {
 export default function SignRequestsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [customerName, setCustomerName] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState<SignRequestItem | null>(null);
@@ -290,6 +298,9 @@ export default function SignRequestsPage() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('customerName', customerName);
+      if (paymentAmount) {
+        formData.append('paymentAmount', paymentAmount);
+      }
       if (signatureBox) {
         formData.append('signatureX', String(signatureBox.x));
         formData.append('signatureY', String(signatureBox.y));
@@ -302,6 +313,7 @@ export default function SignRequestsPage() {
       setCreated(data);
       setFile(null);
       setCustomerName('');
+      setPaymentAmount('');
       setPreviewReady(false);
       setSignatureBox(null);
       setDragRectPx(null);
@@ -345,6 +357,15 @@ export default function SignRequestsPage() {
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="客戶標籤（選填，方便你在列表辨識，例如：王小姐）"
               maxLength={100}
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-400"
+            />
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={paymentAmount}
+              onChange={(e) => setPaymentAmount(e.target.value)}
+              placeholder="收款金額（選填，填了才會在簽署完成頁讓客戶選匯款或刷卡）"
               className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-400"
             />
             <input
@@ -438,13 +459,21 @@ export default function SignRequestsPage() {
                     <p className="mt-0.5 truncate text-xs text-slate-400">{item.fileName}</p>
                     <p className="mt-0.5 text-[11px] text-slate-400">
                       {formatSize(item.fileSize)} ・ {new Date(item.createdAt).toLocaleString('zh-TW')}
+                      {typeof item.paymentAmount === 'number' && ` ・ 收款 $${item.paymentAmount.toLocaleString()}`}
                     </p>
                   </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${STATUS_LABEL[item.status].className}`}
-                  >
-                    {STATUS_LABEL[item.status].label}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${STATUS_LABEL[item.status].className}`}
+                    >
+                      {STATUS_LABEL[item.status].label}
+                    </span>
+                    {item.paymentChoice && (
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        {PAYMENT_CHOICE_LABEL[item.paymentChoice]}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-3 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">

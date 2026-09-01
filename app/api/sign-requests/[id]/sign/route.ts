@@ -34,7 +34,7 @@ export async function GET(_request: Request, { params }: Params) {
 
   await dbConnect();
   const signRequest = await SignRequest.findById(id).select(
-    'fileName fileUrl customerName status signedAt signedFileUrl'
+    'fileName fileUrl customerName status signedAt signedFileUrl paymentAmount paymentChoice'
   );
   if (!signRequest) {
     return NextResponse.json({ error: '找不到這份合約' }, { status: 404 });
@@ -47,6 +47,8 @@ export async function GET(_request: Request, { params }: Params) {
     status: signRequest.status,
     signedAt: signRequest.signedAt,
     signedFileUrl: signRequest.signedFileUrl,
+    paymentAmount: signRequest.paymentAmount,
+    paymentChoice: signRequest.paymentChoice,
   });
 }
 

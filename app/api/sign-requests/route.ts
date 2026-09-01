@@ -20,7 +20,9 @@ export async function GET() {
 
   await dbConnect();
   const requests = await SignRequest.find({ user: currentUser._id })
-    .select('customerName fileName fileUrl fileSize status signedAt signedFileUrl signHistory createdAt')
+    .select(
+      'customerName fileName fileUrl fileSize status signedAt signedFileUrl signHistory paymentAmount paymentChoice createdAt'
+    )
     .sort({ createdAt: -1 });
 
   return NextResponse.json(requests);
@@ -40,6 +42,7 @@ export async function POST(request: Request) {
   const signatureY = parseNumberField(formData?.get('signatureY'));
   const signatureWidth = parseNumberField(formData?.get('signatureWidth'));
   const signatureHeight = parseNumberField(formData?.get('signatureHeight'));
+  const paymentAmount = parseNumberField(formData?.get('paymentAmount'));
 
   if (!file || !(file instanceof File)) {
     return NextResponse.json({ error: '請選擇合約 PDF' }, { status: 400 });
@@ -80,6 +83,7 @@ export async function POST(request: Request) {
     signatureY,
     signatureWidth,
     signatureHeight,
+    paymentAmount,
   });
 
   return NextResponse.json(signRequest, { status: 201 });
