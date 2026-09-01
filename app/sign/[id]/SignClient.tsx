@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import SignaturePad from 'signature_pad';
 
 type SignInfo = {
@@ -37,12 +37,122 @@ function buildAttestationImage(signatureCanvas: HTMLCanvasElement): string {
   return composite.toDataURL('image/png');
 }
 
+// 簽名用全螢幕彈窗，跟合約內容頁完全分開。
+// 這樣不管手指怎麼滑（包含滑出簽名畫布以外的地方）都不會牽動到背景的合約捲動，
+// 因為彈窗開著的時候背景本身就被鎖死、滑不動。
+function SignatureModal({
+  onCancel,
+  onConfirm,
+  submitting,
+  submitError,
+}: {
+  onCancel: () => void;
+  onConfirm: (dataUrl: string) => void;
+  submitting: boolean;
+  submitError: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const padRef = useRef<SignaturePad | null>(null);
+  const [hasSignature, setHasSignature] = useState(false);
+
+  // 鎖住背景頁面捲動：用 position: fixed 把 body 固定住，這比單純 overflow:hidden
+  // 在 iOS Safari 上更可靠（overflow:hidden 有時候擋不住 bounce/rubber-band 捲動）
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = { position: body.style.position, top: body.style.top, width: body.style.width };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const setupCanvas = () => {
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      canvas.getContext('2d')?.scale(ratio, ratio);
+      padRef.current?.clear();
+    };
+
+    const pad = new SignaturePad(canvas, { minWidth: 1.2, maxWidth: 2.8, penColor: '#1e293b' });
+    padRef.current = pad;
+    pad.addEventListener('endStroke', () => setHasSignature(!pad.isEmpty()));
+
+    setupCanvas();
+    const handleResize = () => setupCanvas();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      pad.off();
+    };
+  }, []);
+
+  function handleClear() {
+    padRef.current?.clear();
+    setHasSignature(false);
+  }
+
+  function handleConfirm() {
+    if (!padRef.current || padRef.current.isEmpty() || !canvasRef.current) return;
+    onConfirm(buildAttestationImage(canvasRef.current));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex touch-none flex-col bg-white">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
+        <p className="text-sm font-bold text-slate-800">請在下方簽名</p>
+        <button type="button" onClick={onCancel} className="text-sm text-slate-400 hover:text-slate-600">
+          取消
+        </button>
+      </div>
+
+      <canvas ref={canvasRef} className="w-full flex-1 touch-none" />
+
+      <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 px-4 py-3">
+        {submitError && <p className="text-center text-sm text-red-500">{submitError}</p>}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleClear}
+            className="shrink-0 text-sm text-slate-400 underline hover:text-slate-600"
+          >
+            清除重簽
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={!hasSignature || submitting}
+            className="flex flex-1 items-center justify-center gap-2 rounded-full bg-indigo-600 px-6 py-3 font-bold text-white shadow-lg transition-colors hover:bg-indigo-700 disabled:bg-gray-300"
+          >
+            {submitting && (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            )}
+            {submitting ? '送出中...' : '確認簽署'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SignClient({ id }: { id: string }) {
   const [info, setInfo] = useState<SignInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
-  const [hasSignature, setHasSignature] = useState(false);
+  const [isSignModalOpen, setIsSignModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -51,9 +161,6 @@ export default function SignClient({ id }: { id: string }) {
   const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
   const [pdfLoading, setPdfLoading] = useState(true);
   const [pdfError, setPdfError] = useState('');
-
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const padRef = useRef<SignaturePad | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -112,56 +219,10 @@ export default function SignClient({ id }: { id: string }) {
     })();
   }, [info]);
 
-  const setupCanvas = useCallback((canvas: HTMLCanvasElement) => {
-    const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * ratio;
-    canvas.height = rect.height * ratio;
-    canvas.getContext('2d')?.scale(ratio, ratio);
-    padRef.current?.clear();
-  }, []);
-
-  useEffect(() => {
-    if (!info || info.status !== 'pending') return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const pad = new SignaturePad(canvas, { minWidth: 1.2, maxWidth: 2.8, penColor: '#1e293b' });
-    padRef.current = pad;
-    pad.addEventListener('endStroke', () => setHasSignature(!pad.isEmpty()));
-
-    setupCanvas(canvas);
-    const handleResize = () => setupCanvas(canvas);
-    window.addEventListener('resize', handleResize);
-
-    // 光靠 CSS 的 touch-action: none 在部分手機瀏覽器攔不住由上往下畫觸發的頁面捲動，
-    // 額外掛一個非 passive 的 touchmove 監聽器強制擋掉（signature_pad 官方文件建議的作法）
-    const preventScrollWhileSigning = (e: TouchEvent) => {
-      if (e.target === canvas) e.preventDefault();
-    };
-    document.body.addEventListener('touchmove', preventScrollWhileSigning, { passive: false });
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      document.body.removeEventListener('touchmove', preventScrollWhileSigning);
-      pad.off();
-    };
-  }, [info, setupCanvas]);
-
-  function handleClear() {
-    padRef.current?.clear();
-    setHasSignature(false);
-  }
-
-  async function handleSubmit() {
-    if (!padRef.current || padRef.current.isEmpty()) {
-      setSubmitError('請先簽名');
-      return;
-    }
+  async function handleConfirmSignature(signatureDataUrl: string) {
     setSubmitting(true);
     setSubmitError('');
     try {
-      const signatureDataUrl = buildAttestationImage(canvasRef.current!);
       const res = await fetch(`/api/sign-requests/${id}/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -170,6 +231,7 @@ export default function SignClient({ id }: { id: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '送出失敗');
       setInfo((prev) => (prev ? { ...prev, ...data } : prev));
+      setIsSignModalOpen(false);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : '送出失敗');
     } finally {
@@ -251,36 +313,25 @@ export default function SignClient({ id }: { id: string }) {
         ))}
       </div>
 
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-4 sm:p-6 flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-semibold text-slate-500">請在下方用手指簽名</p>
-          <canvas
-            ref={canvasRef}
-            className="w-full rounded-xl border-2 border-dashed border-slate-300 touch-none"
-            style={{ height: 180 }}
-          />
-          <button
-            type="button"
-            onClick={handleClear}
-            className="self-end text-xs text-slate-400 hover:text-slate-600 underline"
-          >
-            清除重簽
-          </button>
-        </div>
-
-        {submitError && <p className="text-center text-red-500 text-sm">{submitError}</p>}
-
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-4 sm:p-6 flex flex-col gap-2">
+        <p className="text-center text-sm text-slate-600">確認合約內容後，點下方按鈕開始簽名</p>
         <button
-          onClick={handleSubmit}
-          disabled={submitting || !hasSignature}
-          className="w-full flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-indigo-600 disabled:bg-gray-300 text-white font-bold shadow-lg hover:bg-indigo-700 transition-colors"
+          type="button"
+          onClick={() => setIsSignModalOpen(true)}
+          className="w-full flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 transition-colors"
         >
-          {submitting && (
-            <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-          )}
-          {submitting ? '送出中...' : '確認簽署'}
+          ✍️ 開始簽名
         </button>
       </div>
+
+      {isSignModalOpen && (
+        <SignatureModal
+          onCancel={() => setIsSignModalOpen(false)}
+          onConfirm={handleConfirmSignature}
+          submitting={submitting}
+          submitError={submitError}
+        />
+      )}
     </main>
   );
 }
