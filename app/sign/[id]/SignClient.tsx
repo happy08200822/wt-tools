@@ -15,12 +15,13 @@ type SignInfo = {
 };
 
 // 公司固定收款帳戶，跟金額無關的部分寫死在這裡，帳戶真的換了再改這裡就好
+const BANK_ACCOUNT_NUMBER = '2068-01-8000262-2';
 const BANK_TRANSFER_INFO = `[匯款帳號]
 台新國際商業銀行
 
 銀行代號：812
 機構代碼：0687
-銀行帳號：2068-01-8000262-2
+銀行帳號：${BANK_ACCOUNT_NUMBER}
 機構名稱：建北分行
 帳戶名：預約科技行銷股份有限公司`;
 
@@ -343,7 +344,7 @@ export default function SignClient({ id }: { id: string }) {
   const [paymentChoice, setPaymentChoice] = useState<'transfer' | 'card' | null>(null);
   const [choosingPayment, setChoosingPayment] = useState(false);
   const [paymentChoiceError, setPaymentChoiceError] = useState('');
-  const [bankInfoCopied, setBankInfoCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<'account' | 'full' | null>(null);
 
   // 合約每一頁自己渲染成圖片直接嵌在頁面裡
   const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
@@ -421,15 +422,14 @@ export default function SignClient({ id }: { id: string }) {
     }
   }
 
-  async function handleCopyBankInfo(amount: number) {
-    const text = `ezPretty 預計與您收取 $${amount.toLocaleString()}，再麻煩匯款後，提供匯款後五碼呦🙆\n\n${BANK_TRANSFER_INFO}`;
+  async function handleCopy(field: 'account' | 'full', text: string) {
     try {
       await navigator.clipboard.writeText(text);
     } catch {
       // 環境不支援剪貼簿也不擋主要流程
     }
-    setBankInfoCopied(true);
-    setTimeout(() => setBankInfoCopied(false), 1500);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 1500);
   }
 
   if (loading) {
@@ -504,18 +504,27 @@ export default function SignClient({ id }: { id: string }) {
                 <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 p-3 font-sans text-xs text-slate-600">
                   {BANK_TRANSFER_INFO}
                 </pre>
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => handleCopyBankInfo(amount)}
-                    className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
-                  >
-                    {bankInfoCopied ? '已複製 ✓' : '複製匯款資訊'}
-                  </button>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopy('account', BANK_ACCOUNT_NUMBER)}
+                      className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+                    >
+                      {copiedField === 'account' ? '已複製 ✓' : '複製帳號'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy('full', BANK_TRANSFER_INFO)}
+                      className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+                    >
+                      {copiedField === 'full' ? '已複製 ✓' : '複製完整資訊'}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setPaymentChoice(null)}
-                    className="text-xs text-slate-400 underline hover:text-slate-600"
+                    className="shrink-0 text-xs text-slate-400 underline hover:text-slate-600"
                   >
                     選錯了？重新選擇
                   </button>
