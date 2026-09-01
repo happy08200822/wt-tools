@@ -29,6 +29,12 @@ const BANK_TRANSFER_INFO = `[匯款帳號]
 機構名稱：建北分行
 帳戶名：預約科技行銷股份有限公司`;
 
+const NEXT_STEPS = [
+  { title: '已收到您的合約', desc: '感謝您完成簽署，我們已經收到您簽名的合約囉！' },
+  { title: '公司用印', desc: '我們會盡快為您完成公司用印。' },
+  { title: '合約回傳', desc: '用印完成後，會將蓋好章的合約回傳給您留存，請留意後續通知。' },
+];
+
 // 只截取畫布上實際有簽名筆跡的最小範圍，四周空白全部裁掉。
 // 簽名畫布現在是全螢幕直向的（手機直立時上下幾乎佔滿螢幕），但老闆在合約上框的簽名區塊通常是扁的
 // （貼在乙方旁邊的一行空白）。如果直接把整塊直向畫布等比例塞進扁框裡，畫面會被壓得只剩中間一小條。
@@ -459,6 +465,7 @@ export default function SignClient({ id }: { id: string }) {
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 flex flex-col items-center gap-3 text-center">
           <span className="text-4xl">✅</span>
           <h1 className="text-xl font-bold text-slate-800">已完成簽署</h1>
+          <p className="text-sm text-slate-600">已收到您的合約，謝謝您！我們會盡快完成用印，再把合約回傳給您唷 🙏</p>
           {info.signedAt && (
             <p className="text-sm text-slate-500">
               簽署時間：{new Date(info.signedAt).toLocaleString('zh-TW')}
@@ -564,6 +571,27 @@ export default function SignClient({ id }: { id: string }) {
             )}
           </div>
         )}
+
+        <div className="w-full max-w-md">
+          <p className="text-xs font-bold tracking-[0.2em] text-indigo-600 uppercase">What&apos;s Next</p>
+          <h2 className="mt-1 mb-3 text-lg font-extrabold text-slate-900">簽約後的流程</h2>
+          <div className="flex flex-col gap-3">
+            {NEXT_STEPS.map((step, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-[0_8px_20px_-12px_rgba(15,23,42,0.15)]"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
+                  {i + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900">{step.title}</p>
+                  <p className="mt-0.5 text-[13px] text-slate-500">{step.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {showContractModal && info.signedFileUrl && (
           <ContractViewerModal
