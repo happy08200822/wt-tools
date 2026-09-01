@@ -64,6 +64,14 @@ const TOOLS = [
     gradient: "from-lime-400 to-teal-600",
   },
   {
+    href: "/weather",
+    emoji: "⛅",
+    tag: "API 練習",
+    title: "台灣天氣預報",
+    desc: "串接 Open-Meteo 公開氣象 API，選擇縣市查看即時天氣與未來 5 天預報。",
+    gradient: "from-sky-400 to-indigo-600",
+  },
+  {
     href: "/qrcode",
     emoji: "📱",
     tag: "工具",
@@ -104,12 +112,28 @@ const TOOLS = [
     gradient: "from-slate-500 to-slate-800",
   },
   {
+    href: "/sign-requests",
+    emoji: "✍️",
+    tag: "工具",
+    title: "電子簽署",
+    desc: "上傳合約 PDF，產生簽署連結給客戶，手指簽名後自動蓋上時間戳記存檔。",
+    gradient: "from-indigo-500 to-sky-700",
+  },
+  {
     href: "/receipts",
     emoji: "🧾",
     tag: "AI 分析",
     title: "收據辨識",
     desc: "上傳收據照片，Gemini 拆解廠商/日期/品項明細，一鍵複製貼上 Excel。",
     gradient: "from-amber-500 to-orange-700",
+  },
+  {
+    href: "/vendors",
+    emoji: "📇",
+    tag: "AI 分析",
+    title: "NUVOLA 記帳系統",
+    desc: "AI 辨識收據跟營業額截圖，支出/收入/損益報表一站管理。",
+    gradient: "from-orange-500 to-red-700",
   },
 ];
 
