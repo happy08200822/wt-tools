@@ -129,42 +129,50 @@ export default function SignRequestsPage() {
 
       const containerWidth = previewContainerRef.current?.clientWidth || 560;
       const baseViewport = page.getViewport({ scale: 1 });
-      const scale = containerWidth / baseViewport.width;
-      const viewport = page.getViewport({ scale });
+      const cssScale = containerWidth / baseViewport.width;
+      // 畫面上顯示 + 拖曳座標換算都用 CSS 像素比例的 viewport；
+      // 手機螢幕像素密度較高，實際渲染要再乘上 devicePixelRatio 才不會模糊，
+      // 兩者分開算，渲染解析度提高不會影響拖曳座標的換算
+      const cssViewport = page.getViewport({ scale: cssScale });
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 3);
+      const renderViewport = page.getViewport({ scale: cssScale * pixelRatio });
 
       const canvas = previewCanvasRef.current;
       const ctx = canvas?.getContext('2d');
       if (!canvas || !ctx) return;
 
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      canvas.style.width = `${viewport.width}px`;
-      canvas.style.height = `${viewport.height}px`;
+      canvas.width = renderViewport.width;
+      canvas.height = renderViewport.height;
+      canvas.style.width = `${cssViewport.width}px`;
+      canvas.style.height = `${cssViewport.height}px`;
 
-      await page.render({ canvas, canvasContext: ctx, viewport }).promise;
-      viewportRef.current = viewport;
+      await page.render({ canvas, canvasContext: ctx, viewport: renderViewport }).promise;
+      viewportRef.current = cssViewport;
       setPreviewReady(true);
     } catch {
       setPreviewError('無法預覽這份 PDF，仍可直接送出（簽名會加在合約最後新增的一頁）');
     }
   }
 
-  function getCanvasPoint(e: React.MouseEvent<HTMLCanvasElement>) {
+  function getCanvasPoint(e: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = previewCanvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
-  function handlePreviewMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+  function handlePreviewPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!previewCanvasRef.current || !viewportRef.current) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
     const p = getCanvasPoint(e);
     dragStartRef.current = p;
     setDragRectPx({ left: p.x, top: p.y, width: 0, height: 0 });
   }
 
-  function handlePreviewMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
+  function handlePreviewPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     const start = dragStartRef.current;
     if (!start) return;
+    e.preventDefault();
     const p = getCanvasPoint(e);
     setDragRectPx({
       left: Math.min(start.x, p.x),
@@ -174,7 +182,7 @@ export default function SignRequestsPage() {
     });
   }
 
-  function handlePreviewMouseUp(e: React.MouseEvent<HTMLCanvasElement>) {
+  function handlePreviewPointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
     const start = dragStartRef.current;
     const viewport = viewportRef.current;
     dragStartRef.current = null;
@@ -206,8 +214,9 @@ export default function SignRequestsPage() {
     });
   }
 
-  function handlePreviewMouseLeave() {
-    // 拖曳中途滑出畫布就取消這次拖曳，畫面恢復顯示原本已確定的框（如果有的話）
+  function handlePreviewPointerLeave() {
+    // 有 setPointerCapture 之後正常拖曳中不會觸發這個，這裡是防呆（例如瀏覽器不支援 capture）：
+    // 中途離開畫布就取消這次拖曳，畫面恢復顯示原本已確定的框（如果有的話）
     dragStartRef.current = null;
     setDragRectPx(null);
   }
@@ -360,11 +369,12 @@ export default function SignRequestsPage() {
                   <div className="relative w-full overflow-auto rounded-xl border border-slate-200">
                     <canvas
                       ref={previewCanvasRef}
-                      onMouseDown={handlePreviewMouseDown}
-                      onMouseMove={handlePreviewMouseMove}
-                      onMouseUp={handlePreviewMouseUp}
-                      onMouseLeave={handlePreviewMouseLeave}
-                      className="block cursor-crosshair select-none"
+                      onPointerDown={handlePreviewPointerDown}
+                      onPointerMove={handlePreviewPointerMove}
+                      onPointerUp={handlePreviewPointerUp}
+                      onPointerLeave={handlePreviewPointerLeave}
+                      onPointerCancel={handlePreviewPointerLeave}
+                      className="block cursor-crosshair touch-none select-none"
                     />
                     {(dragRectPx ?? committedRectPx) && (
                       <div

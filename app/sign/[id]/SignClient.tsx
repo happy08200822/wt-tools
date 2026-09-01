@@ -85,11 +85,14 @@ export default function SignClient({ id }: { id: string }) {
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 
         const containerWidth = Math.min(window.innerWidth - 32, 640);
+        // 手機螢幕的實際像素密度通常是 2~3 倍，只照 CSS 寬度渲染會讓圖片顯示時被放大、變模糊，
+        // 渲染解析度要乘上 devicePixelRatio 才會清晰（上限 3 避免超大合約在手機上太吃記憶體）
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 3);
         const images: string[] = [];
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const baseViewport = page.getViewport({ scale: 1 });
-          const scale = containerWidth / baseViewport.width;
+          const scale = (containerWidth / baseViewport.width) * pixelRatio;
           const viewport = page.getViewport({ scale });
 
           const canvas = document.createElement('canvas');
@@ -130,8 +133,17 @@ export default function SignClient({ id }: { id: string }) {
     setupCanvas(canvas);
     const handleResize = () => setupCanvas(canvas);
     window.addEventListener('resize', handleResize);
+
+    // 光靠 CSS 的 touch-action: none 在部分手機瀏覽器攔不住由上往下畫觸發的頁面捲動，
+    // 額外掛一個非 passive 的 touchmove 監聽器強制擋掉（signature_pad 官方文件建議的作法）
+    const preventScrollWhileSigning = (e: TouchEvent) => {
+      if (e.target === canvas) e.preventDefault();
+    };
+    document.body.addEventListener('touchmove', preventScrollWhileSigning, { passive: false });
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      document.body.removeEventListener('touchmove', preventScrollWhileSigning);
       pad.off();
     };
   }, [info, setupCanvas]);
