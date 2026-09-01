@@ -60,14 +60,36 @@ function SignatureModal({
   useEffect(() => {
     const scrollY = window.scrollY;
     const body = document.body;
-    const prev = { position: body.style.position, top: body.style.top, width: body.style.width };
+    const html = document.documentElement;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      bodyOverscroll: body.style.overscrollBehavior,
+      htmlOverscroll: html.style.overscrollBehavior,
+    };
     body.style.position = 'fixed';
     body.style.top = `-${scrollY}px`;
     body.style.width = '100%';
+    // LINE／IG 之類的內建瀏覽器常常是靠「頁面拉到底還往下拉（overscroll/彈性回彈）」
+    // 這個訊號來判斷要不要關閉整個瀏覽器，跟網頁本身有沒有捲動無關。
+    // overscroll-behavior: none 明確告訴瀏覽器不要做這個回彈動作，減少被誤判成「使用者要滑掉」的機率
+    body.style.overscrollBehavior = 'none';
+    html.style.overscrollBehavior = 'none';
+
+    // 有些內嵌瀏覽器的關閉手勢是看網頁有沒有對 touchmove 呼叫 preventDefault 來判斷
+    // 「這個手勢網頁自己要處理」，這裡全域擋一次當作最後一道防線（彈窗開著時整個畫面都是簽名視窗，
+    // 不會有其他東西需要捲動，擋掉不影響任何功能）
+    const blockTouchMove = (e: TouchEvent) => e.preventDefault();
+    document.addEventListener('touchmove', blockTouchMove, { passive: false });
+
     return () => {
       body.style.position = prev.position;
       body.style.top = prev.top;
       body.style.width = prev.width;
+      body.style.overscrollBehavior = prev.bodyOverscroll;
+      html.style.overscrollBehavior = prev.htmlOverscroll;
+      document.removeEventListener('touchmove', blockTouchMove);
       window.scrollTo(0, scrollY);
     };
   }, []);
