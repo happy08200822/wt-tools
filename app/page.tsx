@@ -64,6 +64,14 @@ const TOOLS = [
     gradient: "from-lime-400 to-teal-600",
   },
   {
+    href: "/biz-leads",
+    emoji: "🎯",
+    tag: "資料庫",
+    title: "店家開發名單",
+    desc: "整理美業店家的 LINE/IG/FB 聯絡方式，追蹤加好友、發訊息、成交進度。",
+    gradient: "from-pink-400 to-fuchsia-600",
+  },
+  {
     href: "/weather",
     emoji: "⛅",
     tag: "API 練習",
@@ -137,6 +145,25 @@ const TOOLS = [
   },
 ];
 
+const CATEGORY_META: Record<string, { icon: string; slug: string }> = {
+  "AI 分析": { icon: "🤖", slug: "ai-analysis" },
+  "AI 生圖": { icon: "🎨", slug: "ai-image" },
+  "LINE 工具": { icon: "💬", slug: "line" },
+  "資料庫": { icon: "🗄️", slug: "database" },
+  "生產力": { icon: "⚡", slug: "productivity" },
+  "抽籤": { icon: "🎡", slug: "lottery" },
+  "工具": { icon: "🛠️", slug: "utility" },
+  "API 練習": { icon: "🔌", slug: "api-practice" },
+};
+
+const CATEGORY_ORDER = Object.keys(CATEGORY_META);
+
+const TOOL_CATEGORIES = CATEGORY_ORDER.map((tag) => ({
+  tag,
+  ...CATEGORY_META[tag],
+  tools: TOOLS.filter((t) => t.tag === tag),
+})).filter((c) => c.tools.length > 0);
+
 export default async function Home() {
   const currentUser = await getCurrentUser();
 
@@ -148,16 +175,42 @@ export default async function Home() {
             <span className="text-2xl">🧰</span>
             WT 的小工具箱
           </Link>
-          <nav className="hidden sm:flex items-center gap-6 text-sm font-medium text-slate-500">
-            {TOOLS.map((t) => (
-              <Link
-                key={t.href}
-                href={t.href}
-                className="hover:text-slate-900 transition-colors"
+          <nav className="hidden sm:block">
+            <div className="group relative">
+              <button
+                type="button"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
               >
-                {t.title}
-              </Link>
-            ))}
+                工具分類
+                <span className="text-xs transition-transform duration-150 group-hover:rotate-180">
+                  ▾
+                </span>
+              </button>
+
+              <div className="invisible absolute left-1/2 top-full z-30 -translate-x-1/2 pt-2 opacity-0 transition-all duration-150 group-hover:visible group-hover:opacity-100">
+                <div className="grid grid-cols-2 gap-1 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl sm:grid-cols-3 w-[min(90vw,640px)]">
+                  {TOOL_CATEGORIES.map((cat) => (
+                    <div key={cat.slug} className="p-2">
+                      <div className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-bold text-slate-400">
+                        <span>{cat.icon}</span>
+                        {cat.tag}
+                      </div>
+                      <div className="flex flex-col">
+                        {cat.tools.map((t) => (
+                          <Link
+                            key={t.href}
+                            href={t.href}
+                            className="truncate rounded-lg px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          >
+                            {t.title}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </nav>
           <div className="flex items-center gap-3">
             {currentUser && (
@@ -213,56 +266,84 @@ export default async function Home() {
             日常會用到的小工具，通通集中在這裡：專注計時、抽籤選人、LINE
             預約卡片發送，點一下卡片就能開始使用。
           </p>
+
+          <nav className="mt-8 flex flex-wrap items-center justify-center gap-2">
+            {TOOL_CATEGORIES.map((cat) => (
+              <a
+                key={cat.slug}
+                href={`#cat-${cat.slug}`}
+                className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:border-indigo-300 hover:text-indigo-600"
+              >
+                <span>{cat.icon}</span>
+                {cat.tag}
+                <span className="text-xs font-normal text-slate-400">
+                  {cat.tools.length}
+                </span>
+              </a>
+            ))}
+          </nav>
         </section>
 
-        <section id="tools" className="relative mx-auto max-w-5xl px-6 pb-24">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {TOOLS.map((tool) => (
-              <div
-                key={tool.href}
-                className="group flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white/80 backdrop-blur p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200"
-              >
-                <Link href={tool.href} className="flex flex-1 flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div
-                      className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${tool.gradient} text-2xl shadow-md`}
-                    >
-                      {tool.emoji}
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-500">
-                      {tool.tag}
-                    </span>
-                  </div>
-
-                  <div className="flex-1">
-                    <h2 className="text-lg font-bold text-slate-900">{tool.title}</h2>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                      {tool.desc}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-1 text-sm font-semibold text-indigo-600">
-                    前往使用
-                    <span className="transition-transform duration-200 group-hover:translate-x-1">
-                      →
-                    </span>
-                  </div>
-                </Link>
-
-                {tool.liffUrl && (
-                  <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
-                    <a
-                      href={tool.liffUrl}
-                      className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 truncate"
-                    >
-                      在 LINE 開啟 →
-                    </a>
-                    <CopyLinkButton url={tool.liffUrl} />
-                  </div>
-                )}
+        <section id="tools" className="relative mx-auto max-w-5xl px-6 pb-24 flex flex-col gap-14">
+          {TOOL_CATEGORIES.map((cat) => (
+            <div key={cat.slug} id={`cat-${cat.slug}`} className="scroll-mt-24">
+              <div className="mb-5 flex items-center gap-2">
+                <span className="text-xl">{cat.icon}</span>
+                <h2 className="text-lg font-extrabold text-slate-900">{cat.tag}</h2>
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-400">
+                  {cat.tools.length}
+                </span>
               </div>
-            ))}
-          </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {cat.tools.map((tool) => (
+                  <div
+                    key={tool.href}
+                    className="group flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white/80 backdrop-blur p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200"
+                  >
+                    <Link href={tool.href} className="flex flex-1 flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <div
+                          className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${tool.gradient} text-2xl shadow-md`}
+                        >
+                          {tool.emoji}
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-500">
+                          {tool.tag}
+                        </span>
+                      </div>
+
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold text-slate-900">{tool.title}</h3>
+                        <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                          {tool.desc}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 text-sm font-semibold text-indigo-600">
+                        前往使用
+                        <span className="transition-transform duration-200 group-hover:translate-x-1">
+                          →
+                        </span>
+                      </div>
+                    </Link>
+
+                    {tool.liffUrl && (
+                      <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
+                        <a
+                          href={tool.liffUrl}
+                          className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 truncate"
+                        >
+                          在 LINE 開啟 →
+                        </a>
+                        <CopyLinkButton url={tool.liffUrl} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </section>
       </main>
 
