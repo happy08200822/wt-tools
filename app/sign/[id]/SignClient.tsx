@@ -12,26 +12,77 @@ type SignInfo = {
   signedFileUrl?: string;
 };
 
+// 只截取畫布上實際有簽名筆跡的最小範圍，四周空白全部裁掉。
+// 簽名畫布現在是全螢幕直向的（手機直立時上下幾乎佔滿螢幕），但老闆在合約上框的簽名區塊通常是扁的
+// （貼在乙方旁邊的一行空白）。如果直接把整塊直向畫布等比例塞進扁框裡，畫面會被壓得只剩中間一小條。
+// 裁成只剩簽名筆跡本身之後，圖片的長寬比會自然反映簽名實際的形狀（人簽名通常是橫向書寫），
+// 不管畫布本身是直的還是橫的，塞進框裡都會清楚飽滿。
+function cropToInk(sourceCanvas: HTMLCanvasElement): HTMLCanvasElement {
+  const ctx = sourceCanvas.getContext('2d');
+  if (!ctx) return sourceCanvas;
+
+  const { width, height } = sourceCanvas;
+  const { data } = ctx.getImageData(0, 0, width, height);
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const alpha = data[(y * width + x) * 4 + 3];
+      if (alpha > 10) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return sourceCanvas; // 沒偵測到墨跡，保底用原圖，理論上不會發生
+
+  const inkWidth = maxX - minX + 1;
+  const inkHeight = maxY - minY + 1;
+  const padding = Math.max(8, Math.round(Math.max(inkWidth, inkHeight) * 0.08));
+
+  minX = Math.max(0, minX - padding);
+  minY = Math.max(0, minY - padding);
+  maxX = Math.min(width - 1, maxX + padding);
+  maxY = Math.min(height - 1, maxY + padding);
+
+  const cropped = document.createElement('canvas');
+  cropped.width = maxX - minX + 1;
+  cropped.height = maxY - minY + 1;
+  const croppedCtx = cropped.getContext('2d');
+  if (!croppedCtx) return sourceCanvas;
+  croppedCtx.drawImage(sourceCanvas, minX, minY, cropped.width, cropped.height, 0, 0, cropped.width, cropped.height);
+  return cropped;
+}
+
 // 把簽署日期時間（可能含中文）疊在簽名筆跡的右下角，合成同一張圖再送到後端。
 // pdf-lib 的標準字型畫不出中文，所以文字要在瀏覽器這邊用 canvas 畫成圖片，
 // 後端就完全不用處理中文文字，只要把這張圖貼到 PDF 上就好。
 // 背景保持透明，因為這張圖現在會直接貼在合約原本頁面的空白處，不透明底會蓋出一塊色塊。
 function buildAttestationImage(signatureCanvas: HTMLCanvasElement): string {
-  const ratio = Math.max(window.devicePixelRatio || 1, 1);
+  const source = cropToInk(signatureCanvas);
 
   const composite = document.createElement('canvas');
-  composite.width = signatureCanvas.width;
-  composite.height = signatureCanvas.height;
+  composite.width = source.width;
+  composite.height = source.height;
 
   const ctx = composite.getContext('2d')!;
-  ctx.drawImage(signatureCanvas, 0, 0);
+  ctx.drawImage(source, 0, 0);
 
   const timestamp = new Date().toLocaleString('zh-TW', { hour12: false }).replace(/\//g, '-');
+  // 字級跟裁切後的圖片大小成比例，簽名裁得小時字也跟著縮小，避免蓋過筆跡
+  const fontSize = Math.min(Math.max(source.height * 0.09, 14), 32);
   ctx.fillStyle = 'rgba(30, 41, 59, 0.65)';
-  ctx.font = `${11 * ratio}px sans-serif`;
+  ctx.font = `${fontSize}px sans-serif`;
   ctx.textBaseline = 'bottom';
   ctx.textAlign = 'right';
-  const margin = 4 * ratio;
+  const margin = fontSize * 0.3;
   ctx.fillText(timestamp, composite.width - margin, composite.height - margin);
 
   return composite.toDataURL('image/png');
