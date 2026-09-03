@@ -2,18 +2,35 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-type Status = 'new' | 'friended' | 'messaged' | 'replied' | 'won' | 'rejected';
+type Status =
+  | 'new'
+  | 'friended'
+  | 'messaged'
+  | 'replied'
+  | 'demo_scheduled'
+  | 'demoed'
+  | 'won'
+  | 'rejected'
+  | 'no_reply'
+  | 'unreachable';
+
+type IntentLevel = '' | 'high' | 'medium' | 'low';
 
 type Lead = {
   _id: string;
   name: string;
   category: string;
   address: string;
+  ownerName: string;
   phone: string;
+  email: string;
+  lineId: string;
   lineUrl: string;
   igUrl: string;
   fbUrl: string;
   status: Status;
+  intentLevel: IntentLevel;
+  companyStatus: string;
   note: string;
   createdAt: string;
 };
@@ -22,32 +39,85 @@ type FormState = {
   name: string;
   category: string;
   address: string;
+  ownerName: string;
   phone: string;
+  email: string;
+  lineId: string;
   lineUrl: string;
   igUrl: string;
   fbUrl: string;
+  companyStatus: string;
   note: string;
 };
 
+// messaged 沿用舊的欄位值，但語意改成「聯絡中」，避免既有資料的狀態值失效
 const STATUS_META: Record<Status, { label: string; badge: string }> = {
   new: { label: '未聯繫', badge: 'bg-slate-100 text-slate-600' },
   friended: { label: '已加好友', badge: 'bg-sky-100 text-sky-700' },
-  messaged: { label: '已發訊息', badge: 'bg-amber-100 text-amber-700' },
+  messaged: { label: '聯絡中', badge: 'bg-amber-100 text-amber-700' },
   replied: { label: '已回覆', badge: 'bg-indigo-100 text-indigo-700' },
-  won: { label: '已成交', badge: 'bg-emerald-100 text-emerald-700' },
-  rejected: { label: '婉拒', badge: 'bg-rose-100 text-rose-700' },
+  demo_scheduled: { label: '已約展', badge: 'bg-violet-100 text-violet-700' },
+  demoed: { label: '已展示', badge: 'bg-cyan-100 text-cyan-700' },
+  won: { label: '成交', badge: 'bg-emerald-100 text-emerald-700' },
+  rejected: { label: '拒絕', badge: 'bg-rose-100 text-rose-700' },
+  no_reply: { label: '已讀不回', badge: 'bg-orange-100 text-orange-700' },
+  unreachable: { label: '聯絡不到人', badge: 'bg-zinc-200 text-zinc-600' },
 };
 
-const STATUS_ORDER: Status[] = ['new', 'friended', 'messaged', 'replied', 'won', 'rejected'];
+const STATUS_ORDER: Status[] = [
+  'new',
+  'friended',
+  'messaged',
+  'replied',
+  'demo_scheduled',
+  'demoed',
+  'won',
+  'rejected',
+  'no_reply',
+  'unreachable',
+];
+
+// 展示完之後才有意義的意願度評估，跟主進度分開存
+const INTENT_META: Record<Exclude<IntentLevel, ''>, { label: string; badge: string }> = {
+  high: { label: '意願度高', badge: 'bg-emerald-100 text-emerald-700' },
+  medium: { label: '意願度中', badge: 'bg-amber-100 text-amber-700' },
+  low: { label: '意願度低', badge: 'bg-rose-100 text-rose-700' },
+};
+
+// 只有走到「已展示」之後，評估意願度才有意義
+const INTENT_ELIGIBLE_STATUSES: Status[] = ['demoed', 'won', 'rejected'];
+
+// 自己追蹤的狀態 vs 公司表 AA欄狀態，兩邊看起來對不上時提醒去公司表手動改
+// 先寫一版簡單的關鍵字比對，不準的話之後再調整
+function isCompanyStatusStale(lead: Lead): boolean {
+  if (!lead.companyStatus) return false;
+  const cs = lead.companyStatus;
+  switch (lead.status) {
+    case 'demo_scheduled':
+      return !cs.includes('約展');
+    case 'demoed':
+      return !cs.includes('展示') && !cs.includes('聯絡到');
+    case 'won':
+      return !cs.includes('成交');
+    case 'rejected':
+      return !cs.includes('拒絕') && !cs.includes('無效');
+    default:
+      return false;
+  }
+}
 
 const EMPTY_FORM: FormState = {
   name: '',
   category: '',
   address: '',
+  ownerName: '',
   phone: '',
+  email: '',
+  lineId: '',
   lineUrl: '',
   igUrl: '',
   fbUrl: '',
+  companyStatus: '',
   note: '',
 };
 
@@ -125,7 +195,9 @@ export default function BizLeadsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '匯入失敗');
       setImportResult(
-        `匯入成功 ${data.importedCount} 筆${data.skippedRows > 0 ? `，略過 ${data.skippedRows} 筆（缺店名）` : ''}`
+        `新增 ${data.importedCount} 筆` +
+          (data.updatedCount > 0 ? `，更新 ${data.updatedCount} 筆（電話號碼比對到既有名單）` : '') +
+          (data.skippedRows > 0 ? `，略過 ${data.skippedRows} 筆（缺店名）` : '')
       );
       setImportCsv('');
       await loadLeads();
@@ -152,16 +224,36 @@ export default function BizLeadsPage() {
     }
   }
 
+  async function handleIntentChange(id: string, intentLevel: IntentLevel) {
+    setError('');
+    try {
+      const res = await fetch(`/api/biz-leads/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intentLevel }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '更新失敗');
+      setLeads((prev) => prev.map((l) => (l._id === id ? data : l)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新失敗');
+    }
+  }
+
   function startEdit(lead: Lead) {
     setEditingId(lead._id);
     setEditForm({
       name: lead.name,
       category: lead.category,
       address: lead.address,
+      ownerName: lead.ownerName,
       phone: lead.phone,
+      email: lead.email,
+      lineId: lead.lineId,
       lineUrl: lead.lineUrl,
       igUrl: lead.igUrl,
       fbUrl: lead.fbUrl,
+      companyStatus: lead.companyStatus,
       note: lead.note,
     });
   }
@@ -200,7 +292,7 @@ export default function BizLeadsPage() {
   }
 
   const statusCounts = useMemo(() => {
-    const counts: Record<Status, number> = { new: 0, friended: 0, messaged: 0, replied: 0, won: 0, rejected: 0 };
+    const counts = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0])) as Record<Status, number>;
     for (const lead of leads) counts[lead.status] += 1;
     return counts;
   }, [leads]);
@@ -209,6 +301,8 @@ export default function BizLeadsPage() {
     () => (statusFilter === 'all' ? leads : leads.filter((l) => l.status === statusFilter)),
     [leads, statusFilter]
   );
+
+  const staleCount = useMemo(() => leads.filter(isCompanyStatusStale).length, [leads]);
 
   return (
     <main className="min-h-screen flex flex-col items-center gap-6 p-8 bg-gradient-to-br from-pink-200 via-rose-300 to-fuchsia-600">
@@ -225,6 +319,12 @@ export default function BizLeadsPage() {
       </div>
 
       <div className="w-full max-w-2xl bg-white/95 backdrop-blur rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col gap-5">
+        {staleCount > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs font-semibold text-amber-700">
+            ⚠️ 有 {staleCount} 筆的狀態跟公司表對不上，記得去公司表手動更新
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-gray-600">共 {leads.length} 筆名單</p>
           <div className="flex items-center gap-3">
@@ -251,7 +351,10 @@ export default function BizLeadsPage() {
               貼上表格資料（例如從 Excel/Google Sheets 複製），第一列要是標題
             </p>
             <p className="text-[11px] text-gray-400">
-              標題可以用：店名、類別、地址、電話、LINE、IG、FB、備註（只有「店名」是必填，其他欄位沒有也沒關係）
+              標題可以用：店名、類別、地址、負責人姓名、電話、email、line_id、LINE、IG、FB、業務進度、備註（只有「店名」是必填）
+            </p>
+            <p className="text-[11px] text-gray-400">
+              電話號碼比對到既有名單時，只會更新聯絡資訊跟「業務進度」，不會動到你自己追蹤的狀態
             </p>
             <textarea
               value={importCsv}
@@ -288,9 +391,21 @@ export default function BizLeadsPage() {
                 className="border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
               />
               <input
+                value={form.ownerName}
+                onChange={(e) => setForm({ ...form, ownerName: e.target.value })}
+                placeholder="負責人姓名"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
+              />
+              <input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 placeholder="電話"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
+              />
+              <input
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="email"
                 className="border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
               />
               <input
@@ -300,10 +415,16 @@ export default function BizLeadsPage() {
                 className="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
               />
               <input
+                value={form.lineId}
+                onChange={(e) => setForm({ ...form, lineId: e.target.value })}
+                placeholder="LINE ID"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
+              />
+              <input
                 value={form.lineUrl}
                 onChange={(e) => setForm({ ...form, lineUrl: e.target.value })}
                 placeholder="LINE 連結"
-                className="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
               />
               <input
                 value={form.igUrl}
@@ -315,6 +436,12 @@ export default function BizLeadsPage() {
                 value={form.fbUrl}
                 onChange={(e) => setForm({ ...form, fbUrl: e.target.value })}
                 placeholder="Facebook 連結"
+                className="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
+              />
+              <input
+                value={form.companyStatus}
+                onChange={(e) => setForm({ ...form, companyStatus: e.target.value })}
+                placeholder="公司表狀態（選填）"
                 className="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400 bg-white"
               />
               <textarea
@@ -382,9 +509,21 @@ export default function BizLeadsPage() {
                       className="border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
                     />
                     <input
+                      value={editForm.ownerName}
+                      onChange={(e) => setEditForm({ ...editForm, ownerName: e.target.value })}
+                      placeholder="負責人姓名"
+                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
+                    />
+                    <input
                       value={editForm.phone}
                       onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                       placeholder="電話"
+                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
+                    />
+                    <input
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      placeholder="email"
                       className="border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
                     />
                     <input
@@ -394,10 +533,16 @@ export default function BizLeadsPage() {
                       className="col-span-2 border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
                     />
                     <input
+                      value={editForm.lineId}
+                      onChange={(e) => setEditForm({ ...editForm, lineId: e.target.value })}
+                      placeholder="LINE ID"
+                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
+                    />
+                    <input
                       value={editForm.lineUrl}
                       onChange={(e) => setEditForm({ ...editForm, lineUrl: e.target.value })}
                       placeholder="LINE 連結"
-                      className="col-span-2 border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
+                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
                     />
                     <input
                       value={editForm.igUrl}
@@ -409,6 +554,12 @@ export default function BizLeadsPage() {
                       value={editForm.fbUrl}
                       onChange={(e) => setEditForm({ ...editForm, fbUrl: e.target.value })}
                       placeholder="Facebook 連結"
+                      className="col-span-2 border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
+                    />
+                    <input
+                      value={editForm.companyStatus}
+                      onChange={(e) => setEditForm({ ...editForm, companyStatus: e.target.value })}
+                      placeholder="公司表狀態"
                       className="col-span-2 border border-gray-300 rounded-lg px-2 py-1.5 text-black text-sm outline-none focus:ring-2 focus:ring-rose-400"
                     />
                     <textarea
@@ -448,20 +599,51 @@ export default function BizLeadsPage() {
                         )}
                       </div>
                       {lead.address && <p className="text-xs text-gray-400 mt-0.5">{lead.address}</p>}
-                      {lead.phone && <p className="text-xs text-gray-400">{lead.phone}</p>}
+                      {lead.ownerName && <p className="text-xs text-gray-400">👤 {lead.ownerName}</p>}
+                      {lead.phone && <p className="text-xs text-gray-400">☎️ {lead.phone}</p>}
+                      {lead.email && <p className="text-xs text-gray-400">✉️ {lead.email}</p>}
+                      {lead.lineId && <p className="text-xs text-gray-400">💬 {lead.lineId}</p>}
                       {lead.note && <p className="text-xs text-gray-500 mt-1">{lead.note}</p>}
                     </div>
-                    <select
-                      value={lead.status}
-                      onChange={(e) => handleStatusChange(lead._id, e.target.value as Status)}
-                      className={`shrink-0 text-[11px] font-bold rounded-full px-2 py-1 border-0 outline-none ${STATUS_META[lead.status].badge}`}
-                    >
-                      {STATUS_ORDER.map((status) => (
-                        <option key={status} value={status}>
-                          {STATUS_META[status].label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <select
+                        value={lead.status}
+                        onChange={(e) => handleStatusChange(lead._id, e.target.value as Status)}
+                        className={`text-[11px] font-bold rounded-full px-2 py-1 border-0 outline-none ${STATUS_META[lead.status].badge}`}
+                      >
+                        {STATUS_ORDER.map((status) => (
+                          <option key={status} value={status}>
+                            {STATUS_META[status].label}
+                          </option>
+                        ))}
+                      </select>
+                      {INTENT_ELIGIBLE_STATUSES.includes(lead.status) && (
+                        <select
+                          value={lead.intentLevel}
+                          onChange={(e) => handleIntentChange(lead._id, e.target.value as IntentLevel)}
+                          className={`text-[11px] font-semibold rounded-full px-2 py-1 border-0 outline-none ${
+                            lead.intentLevel ? INTENT_META[lead.intentLevel].badge : 'bg-gray-100 text-gray-400'
+                          }`}
+                        >
+                          <option value="">意願度未評估</option>
+                          <option value="high">{INTENT_META.high.label}</option>
+                          <option value="medium">{INTENT_META.medium.label}</option>
+                          <option value="low">{INTENT_META.low.label}</option>
+                        </select>
+                      )}
+                      {lead.companyStatus && (
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            isCompanyStatusStale(lead)
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-gray-100 text-gray-400'
+                          }`}
+                          title="公司表 AA欄目前的值"
+                        >
+                          {isCompanyStatusStale(lead) ? '⚠️ ' : ''}公司表：{lead.companyStatus}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between gap-2">

@@ -1,12 +1,25 @@
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import dbConnect from '@/lib/dbConnect';
-import BizLead, { BIZ_LEAD_STATUSES } from '@/models/BizLead';
+import BizLead, { BIZ_LEAD_STATUSES, BIZ_LEAD_INTENT_LEVELS } from '@/models/BizLead';
 import { getCurrentUser } from '@/lib/session';
 
 type Params = { params: Promise<{ id: string }> };
 
-const EDITABLE_TEXT_FIELDS = ['name', 'category', 'address', 'phone', 'lineUrl', 'igUrl', 'fbUrl', 'note'] as const;
+const EDITABLE_TEXT_FIELDS = [
+  'name',
+  'category',
+  'address',
+  'ownerName',
+  'phone',
+  'email',
+  'lineId',
+  'lineUrl',
+  'igUrl',
+  'fbUrl',
+  'companyStatus',
+  'note',
+] as const;
 
 // PATCH /api/biz-leads/:id - 更新店家資料或開發狀態
 export async function PATCH(request: Request, { params }: Params) {
@@ -40,6 +53,13 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ error: '狀態格式不正確' }, { status: 400 });
     }
     update.status = body.status;
+  }
+
+  if (typeof body.intentLevel === 'string') {
+    if (!BIZ_LEAD_INTENT_LEVELS.includes(body.intentLevel)) {
+      return NextResponse.json({ error: '意願度格式不正確' }, { status: 400 });
+    }
+    update.intentLevel = body.intentLevel;
   }
 
   await dbConnect();

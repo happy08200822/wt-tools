@@ -40,11 +40,15 @@ export async function POST(request: Request) {
     name,
     category: typeof body?.category === 'string' ? body.category.trim() : '',
     address: typeof body?.address === 'string' ? body.address.trim() : '',
+    ownerName: typeof body?.ownerName === 'string' ? body.ownerName.trim() : '',
     phone: typeof body?.phone === 'string' ? body.phone.trim() : '',
+    email: typeof body?.email === 'string' ? body.email.trim() : '',
+    lineId: typeof body?.lineId === 'string' ? body.lineId.trim() : '',
     lineUrl: typeof body?.lineUrl === 'string' ? body.lineUrl.trim() : '',
     igUrl: typeof body?.igUrl === 'string' ? body.igUrl.trim() : '',
     fbUrl: typeof body?.fbUrl === 'string' ? body.fbUrl.trim() : '',
     status,
+    companyStatus: typeof body?.companyStatus === 'string' ? body.companyStatus.trim() : '',
     note: typeof body?.note === 'string' ? body.note.trim() : '',
   });
 

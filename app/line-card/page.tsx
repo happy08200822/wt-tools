@@ -304,6 +304,9 @@ export default function LineCardPage() {
             <Link href="/line-card/leads" className="ml-2 text-emerald-600 underline">
               查看報價追蹤紀錄
             </Link>
+            <Link href="/line-card/text" className="ml-2 text-emerald-600 underline">
+              常用文字發送
+            </Link>
           </p>
           {quota && (
             <p className="text-xs text-gray-400 bg-white/70 rounded-full px-3 py-1 mt-1">
