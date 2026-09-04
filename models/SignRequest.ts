@@ -17,7 +17,11 @@ const SignHistoryEntrySchema = new Schema(
 // 閱讀合約並手指簽名，簽完會產生疊上簽名與時間戳記的最終 PDF
 const SignRequestSchema = new Schema(
   {
-    user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    // 舊資料才會有這個欄位（早期用 NextAuth 帳號登入建立），現在改用下面的 creatorCode/creatorName
+    user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    // 用同事的存取代碼（跟 LINE 圖文選單共用同一份代碼名單）建立時記錄是誰建的，純粹顯示用，不做權限區隔
+    creatorCode: { type: String, default: '', trim: true },
+    creatorName: { type: String, default: '', trim: true },
     customerName: { type: String, default: '', trim: true },
     fileName: { type: String, required: true },
     fileUrl: { type: String, required: true },

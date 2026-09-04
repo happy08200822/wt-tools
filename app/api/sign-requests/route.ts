@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import dbConnect from '@/lib/dbConnect';
 import SignRequest from '@/models/SignRequest';
-import { getCurrentUser } from '@/lib/session';
+import { resolveUser } from '@/app/lib/richmenuUsers';
 
 const MAX_BYTES = 4 * 1024 * 1024; // 4MB，Vercel Serverless Function 的 request body 上限
 const ALLOWED_TYPES = ['application/pdf'];
@@ -11,17 +11,19 @@ function parseNumberField(value: FormDataEntryValue | undefined | null): number 
   return typeof value === 'string' && value !== '' && Number.isFinite(Number(value)) ? Number(value) : undefined;
 }
 
-// GET /api/sign-requests - 列出目前登入者建立過的簽約請求
-export async function GET() {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    return NextResponse.json({ error: '尚未登入' }, { status: 401 });
+// GET /api/sign-requests?code=xxx - 列出所有簽約請求（跟同事共用同一份清單，代碼只是進門密碼）
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get('code')?.trim() ?? '';
+  const userName = await resolveUser(code);
+  if (!userName) {
+    return NextResponse.json({ error: '密碼錯誤，請跟暐庭索取正確的密碼' }, { status: 401 });
   }
 
   await dbConnect();
-  const requests = await SignRequest.find({ user: currentUser._id })
+  const requests = await SignRequest.find()
     .select(
-      'customerName fileName fileUrl fileSize status signedAt signedFileUrl signHistory paymentAmount paymentChoice createdAt'
+      'customerName creatorName fileName fileUrl fileSize status signedAt signedFileUrl signHistory paymentAmount paymentChoice createdAt'
     )
     .sort({ createdAt: -1 });
 
@@ -30,12 +32,13 @@ export async function GET() {
 
 // POST /api/sign-requests - 上傳合約 PDF，建立一筆待簽署的請求
 export async function POST(request: Request) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    return NextResponse.json({ error: '尚未登入' }, { status: 401 });
+  const formData = await request.formData().catch(() => null);
+  const code = typeof formData?.get('accessCode') === 'string' ? (formData.get('accessCode') as string).trim() : '';
+  const userName = await resolveUser(code);
+  if (!userName) {
+    return NextResponse.json({ error: '密碼錯誤，請跟暐庭索取正確的密碼' }, { status: 401 });
   }
 
-  const formData = await request.formData().catch(() => null);
   const file = formData?.get('file');
   const customerName = formData?.get('customerName');
   const signatureX = parseNumberField(formData?.get('signatureX'));
@@ -73,7 +76,8 @@ export async function POST(request: Request) {
   }
 
   const signRequest = await SignRequest.create({
-    user: currentUser._id,
+    creatorCode: code,
+    creatorName: userName,
     customerName: typeof customerName === 'string' ? customerName.trim().slice(0, 100) : '',
     fileName: file.name,
     fileUrl: blob.url,

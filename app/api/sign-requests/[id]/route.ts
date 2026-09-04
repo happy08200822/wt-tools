@@ -3,15 +3,16 @@ import mongoose from 'mongoose';
 import { del } from '@vercel/blob';
 import dbConnect from '@/lib/dbConnect';
 import SignRequest from '@/models/SignRequest';
-import { getCurrentUser } from '@/lib/session';
+import { resolveUser } from '@/app/lib/richmenuUsers';
 
 type Params = { params: Promise<{ id: string }> };
 
-// GET /api/sign-requests/:id - 老闆查看單筆簽約請求的完整詳情（含已簽署版下載連結）
-export async function GET(_request: Request, { params }: Params) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    return NextResponse.json({ error: '尚未登入' }, { status: 401 });
+// GET /api/sign-requests/:id?code=xxx - 查看單筆簽約請求的完整詳情（含已簽署版下載連結）
+export async function GET(request: Request, { params }: Params) {
+  const code = new URL(request.url).searchParams.get('code')?.trim() ?? '';
+  const userName = await resolveUser(code);
+  if (!userName) {
+    return NextResponse.json({ error: '密碼錯誤，請跟暐庭索取正確的密碼' }, { status: 401 });
   }
 
   const { id } = await params;
@@ -21,19 +22,20 @@ export async function GET(_request: Request, { params }: Params) {
 
   await dbConnect();
   const signRequest = await SignRequest.findById(id);
-  if (!signRequest || signRequest.user.toString() !== currentUser._id) {
+  if (!signRequest) {
     return NextResponse.json({ error: '找不到這筆簽約請求' }, { status: 404 });
   }
 
   return NextResponse.json(signRequest);
 }
 
-// DELETE /api/sign-requests/:id - 老闆刪除一筆簽約請求（傳錯合約、客戶不簽了等情況），
+// DELETE /api/sign-requests/:id?code=xxx - 刪除一筆簽約請求（傳錯合約、客戶不簽了等情況），
 // 連同原始合約、簽名圖、已簽署版 PDF、歷史版本一起從 Blob 清掉，不可復原
-export async function DELETE(_request: Request, { params }: Params) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    return NextResponse.json({ error: '尚未登入' }, { status: 401 });
+export async function DELETE(request: Request, { params }: Params) {
+  const code = new URL(request.url).searchParams.get('code')?.trim() ?? '';
+  const userName = await resolveUser(code);
+  if (!userName) {
+    return NextResponse.json({ error: '密碼錯誤，請跟暐庭索取正確的密碼' }, { status: 401 });
   }
 
   const { id } = await params;
@@ -43,7 +45,7 @@ export async function DELETE(_request: Request, { params }: Params) {
 
   await dbConnect();
   const signRequest = await SignRequest.findById(id);
-  if (!signRequest || signRequest.user.toString() !== currentUser._id) {
+  if (!signRequest) {
     return NextResponse.json({ error: '找不到這筆簽約請求' }, { status: 404 });
   }
 
