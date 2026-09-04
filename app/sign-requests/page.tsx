@@ -15,6 +15,7 @@ type SignHistoryEntry = {
 type SignRequestItem = {
   _id: string;
   customerName: string;
+  creatorName?: string;
   fileName: string;
   fileUrl: string;
   fileSize: number;
@@ -84,6 +85,7 @@ function signUrl(id: string) {
 }
 
 export default function SignRequestsPage() {
+  const [accessCode, setAccessCode] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -93,10 +95,19 @@ export default function SignRequestsPage() {
 
   const [list, setList] = useState<SignRequestItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState('');
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sign-requests-access-code', accessCode);
+    } catch {
+      // ignore unavailable storage
+    }
+  }, [accessCode]);
 
   // 合約最後一頁預覽圖，讓老闆拖曳畫出要放簽名的框
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
@@ -231,14 +242,21 @@ export default function SignRequestsPage() {
     setDragRectPx(null);
   }
 
-  async function loadList() {
+  async function loadList(codeOverride?: string) {
+    const code = (codeOverride ?? accessCode).trim();
     setListLoading(true);
+    setListError('');
     try {
-      const res = await fetch('/api/sign-requests');
+      const res = await fetch(`/api/sign-requests?code=${encodeURIComponent(code)}`);
       const data = await res.json();
-      if (res.ok) setList(data);
+      if (!res.ok) {
+        setListError(data.error || '讀取失敗');
+        setList([]);
+        return;
+      }
+      setList(data);
     } catch {
-      // ignore
+      setListError('讀取失敗');
     } finally {
       setListLoading(false);
     }
@@ -249,7 +267,11 @@ export default function SignRequestsPage() {
       return;
     setResettingId(id);
     try {
-      const res = await fetch(`/api/sign-requests/${id}/reset`, { method: 'POST' });
+      const res = await fetch(`/api/sign-requests/${id}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessCode }),
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || '作廢失敗');
@@ -266,7 +288,9 @@ export default function SignRequestsPage() {
     if (!confirm('確定要刪除這筆簽約請求嗎？合約檔案、簽名紀錄都會一併刪除，且無法復原。')) return;
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/sign-requests/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/sign-requests/${id}?code=${encodeURIComponent(accessCode)}`, {
+        method: 'DELETE',
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || '刪除失敗');
@@ -280,7 +304,15 @@ export default function SignRequestsPage() {
   }
 
   useEffect(() => {
-    loadList();
+    let saved = '';
+    try {
+      saved = localStorage.getItem('sign-requests-access-code') || '';
+    } catch {
+      // ignore unavailable storage
+    }
+    if (saved) setAccessCode(saved);
+    loadList(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -298,6 +330,7 @@ export default function SignRequestsPage() {
     setCreated(null);
     try {
       const formData = new FormData();
+      formData.append('accessCode', accessCode);
       formData.append('file', file);
       formData.append('customerName', customerName);
       if (paymentAmount) {
@@ -349,6 +382,34 @@ export default function SignRequestsPage() {
           <p className="max-w-md text-sm text-slate-500">
             上傳合約 PDF，產生簽署連結傳給客戶，客戶手指簽名即完成
           </p>
+        </div>
+
+        <div className="flex w-full flex-col gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
+            密碼
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && loadList()}
+                placeholder="請跟暐庭索取密碼"
+                className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <button
+                type="button"
+                onClick={() => loadList()}
+                disabled={listLoading}
+                className="shrink-0 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+              >
+                {listLoading ? '確認中...' : '確認'}
+              </button>
+            </div>
+          </label>
+          <p className="text-[11px] leading-relaxed text-amber-700">
+            💡 這個工具會跟同事共用，密碼請跟暐庭索取，輸入後會存在你這台裝置的瀏覽器裡，之後不用每次重打。
+          </p>
+          {listError && <p className="text-xs font-semibold text-red-500">{listError}</p>}
         </div>
 
         <div className="w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
@@ -468,6 +529,7 @@ export default function SignRequestsPage() {
                     <p className="mt-0.5 truncate text-xs text-slate-400">{item.fileName}</p>
                     <p className="mt-0.5 text-[11px] text-slate-400">
                       {formatSize(item.fileSize)} ・ {new Date(item.createdAt).toLocaleString('zh-TW')}
+                      {item.creatorName && ` ・ 建立者：${item.creatorName}`}
                       {typeof item.paymentAmount === 'number' && ` ・ 收款 $${item.paymentAmount.toLocaleString()}`}
                     </p>
                   </div>

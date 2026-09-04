@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import dbConnect from '@/lib/dbConnect';
 import SignRequest from '@/models/SignRequest';
-import User from '@/models/User';
-import { pushLineMessage } from '@/app/lib/linePush';
+import { notifyContract } from '@/app/lib/lineTargets';
 import { ATM_TRANSFER_LIMIT } from '@/app/lib/paymentConfig';
 
 type Params = { params: Promise<{ id: string }> };
@@ -54,14 +53,11 @@ export async function POST(request: Request, { params }: Params) {
   signRequest.paymentChosenAt = new Date();
   await signRequest.save();
 
-  const owner = await User.findById(signRequest.user).select('lineUserId');
-  if (owner?.lineUserId) {
-    const label = signRequest.customerName || '客戶';
-    await pushLineMessage(
-      owner.lineUserId,
-      `💰 「${label}」選擇了「${CHOICE_LABEL[choice]}」付款方式${choice !== 'transfer' ? '，記得去後台幫他開通' : ''}`
-    );
-  }
+  const label = signRequest.customerName || '客戶';
+  await notifyContract(
+    `💰 「${label}」選擇了「${CHOICE_LABEL[choice]}」付款方式${choice !== 'transfer' ? '，記得去後台幫他開通' : ''}`,
+    signRequest.user?.toString()
+  );
 
   return NextResponse.json({ paymentChoice: signRequest.paymentChoice, paymentChosenAt: signRequest.paymentChosenAt });
 }

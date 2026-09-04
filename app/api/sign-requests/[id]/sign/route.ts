@@ -4,8 +4,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { put } from '@vercel/blob';
 import dbConnect from '@/lib/dbConnect';
 import SignRequest from '@/models/SignRequest';
-import User from '@/models/User';
-import { pushLineMessage } from '@/app/lib/linePush';
+import { notifyContract } from '@/app/lib/lineTargets';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -180,14 +179,11 @@ export async function POST(request: Request, { params }: Params) {
   signRequest.signedFileSize = signedPdfBytes.byteLength;
   await signRequest.save();
 
-  const owner = await User.findById(signRequest.user).select('lineUserId');
-  if (owner?.lineUserId) {
-    const label = signRequest.customerName || '客戶';
-    await pushLineMessage(
-      owner.lineUserId,
-      `✅ 「${label}」已完成合約電子簽署！\n${signedPdfBlob.url}`
-    );
-  }
+  const label = signRequest.customerName || '客戶';
+  await notifyContract(
+    `✅ 「${label}」已完成合約電子簽署！\n${signedPdfBlob.url}`,
+    signRequest.user?.toString()
+  );
 
   return NextResponse.json({
     status: signRequest.status,

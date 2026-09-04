@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import AiUsageReportTab from './AiUsageReportTab';
+import LinePushSettingsTab from './LinePushSettingsTab';
 
-type Tab = 'users' | 'transactions' | 'posts' | 'aiUsage';
+type Tab = 'users' | 'transactions' | 'posts' | 'aiUsage' | 'linePush';
 
 type AdminUser = {
   _id: string;
@@ -41,6 +42,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'transactions', label: '記帳紀錄' },
   { id: 'posts', label: '留言板文章' },
   { id: 'aiUsage', label: 'AI 用量報表' },
+  { id: 'linePush', label: 'LINE 推播設定' },
 ];
 
 export default function AdminDashboard({ adminId }: { adminId: string }) {
@@ -52,7 +54,7 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
   const [error, setError] = useState('');
 
   async function loadTab(t: Tab) {
-    if (t === 'aiUsage') return; // 這個分頁自己管理資料，不用共用的載入邏輯
+    if (t === 'aiUsage' || t === 'linePush') return; // 這兩個分頁自己管理資料，不用共用的載入邏輯
     setLoading(true);
     setError('');
     try {
@@ -330,6 +332,7 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
       )}
 
       {tab === 'aiUsage' && <AiUsageReportTab />}
+      {tab === 'linePush' && <LinePushSettingsTab />}
     </main>
   );
 }
