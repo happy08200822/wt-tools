@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const SPIN_DURATION_MS = 4000;
 const EXTRA_SPINS = 5;
@@ -8,14 +8,30 @@ const LIGHT_COUNT = 24;
 const WHEEL_SIZE = 320;
 const RING_INSET = 12;
 const HUB_RADIUS = 48;
+const PILL_MAX = 12; // 這個人數以內用白色膠囊顯示名字
+const RADIAL_MAX = 36; // 這個人數以內用放射狀細字，再多就只畫切片＋跑馬燈
 
-function getSegmentColor(index: number) {
-  return index % 2 === 0 ? '#BAE6FD' : '#7DD3FC';
+const SEGMENT_COLORS = ['#BAE6FD', '#7DD3FC', '#38BDF8', '#E0F2FE'];
+
+function getSegmentColor(index: number, total: number) {
+  const color = SEGMENT_COLORS[index % SEGMENT_COLORS.length];
+  // 最後一格跟第一格相鄰，同色時換一個
+  if (total > 1 && index === total - 1 && color === SEGMENT_COLORS[0]) {
+    return SEGMENT_COLORS[2];
+  }
+  return color;
+}
+
+function easeOutQuart(t: number) {
+  return 1 - Math.pow(1 - t, 4);
 }
 
 export default function LotteryPage() {
   const [namesInput, setNamesInput] = useState('小明\n小華\n小美\n阿強');
-  const [rotation, setRotation] = useState(0);
+  const rotationRef = useRef(0);
+  const wheelRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<number | null>(null);
+  const [pointerName, setPointerName] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
   const [drawnNames, setDrawnNames] = useState<string[]>([]);
@@ -39,13 +55,39 @@ export default function LotteryPage() {
   );
 
   const segmentAngle = pool.length > 0 ? 360 / pool.length : 0;
+  const labelMode: 'pill' | 'radial' | 'ticker' =
+    pool.length <= PILL_MAX
+      ? 'pill'
+      : pool.length <= RADIAL_MAX
+        ? 'radial'
+        : 'ticker';
+
+  // 指針在正上方；轉盤順時針轉了 rotation 度，指針指到的是轉盤上 -rotation 那個角度
+  function nameAtPointer(rotation: number) {
+    if (pool.length === 0) return null;
+    const angleOnWheel = ((-rotation % 360) + 360) % 360;
+    const index = Math.floor(angleOnWheel / segmentAngle) % pool.length;
+    return pool[index];
+  }
+
+  useEffect(() => {
+    if (!spinning) setPointerName(nameAtPointer(rotationRef.current));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pool, spinning]);
+
+  useEffect(
+    () => () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    },
+    []
+  );
 
   const wheelBackground = useMemo(() => {
     if (pool.length === 0) return '#e0f2fe';
     const stops = pool.map((_, i) => {
       const start = i * segmentAngle;
       const end = start + segmentAngle;
-      return `${getSegmentColor(i)} ${start}deg ${end}deg`;
+      return `${getSegmentColor(i, pool.length)} ${start}deg ${end}deg`;
     });
     return `conic-gradient(${stops.join(', ')})`;
   }, [pool, segmentAngle]);
@@ -63,22 +105,44 @@ export default function LotteryPage() {
     const winnerName = pool[winnerIndex];
     const thetaCenter = winnerIndex * segmentAngle + segmentAngle / 2;
 
-    const currentMod = ((rotation % 360) + 360) % 360;
+    const startRotation = rotationRef.current;
+    const currentMod = ((startRotation % 360) + 360) % 360;
     const desiredMod = (360 - thetaCenter) % 360;
     let diff = desiredMod - currentMod;
     if (diff <= 0) diff += 360;
 
-    const newRotation = rotation + diff + 360 * EXTRA_SPINS;
+    const endRotation = startRotation + diff + 360 * EXTRA_SPINS;
 
     setWinner(null);
     setSpinning(true);
-    setRotation(newRotation);
 
-    setTimeout(() => {
+    const startTime = performance.now();
+    let lastName: string | null = null;
+
+    const step = (now: number) => {
+      const t = Math.min((now - startTime) / SPIN_DURATION_MS, 1);
+      const current =
+        startRotation + (endRotation - startRotation) * easeOutQuart(t);
+      rotationRef.current = current;
+      if (wheelRef.current) {
+        wheelRef.current.style.transform = `rotate(${current}deg)`;
+      }
+      const name = nameAtPointer(current);
+      if (name !== lastName) {
+        lastName = name;
+        setPointerName(name);
+      }
+
+      if (t < 1) {
+        frameRef.current = requestAnimationFrame(step);
+        return;
+      }
+      frameRef.current = null;
       setWinner(winnerName);
       setDrawnNames((prev) => [...prev, winnerName]);
       setSpinning(false);
-    }, SPIN_DURATION_MS);
+    };
+    frameRef.current = requestAnimationFrame(step);
   }
 
   function handleReset() {
@@ -170,6 +234,13 @@ export default function LotteryPage() {
         </div>
 
         <div className="flex flex-col items-center gap-6">
+          {labelMode === 'ticker' && (
+            <div className="w-64 text-center bg-white/95 text-sky-800 font-bold text-lg px-5 py-2 rounded-full shadow-lg truncate">
+              {/* 抽中的人會被移出轉盤，停下後顯示得獎者，不顯示隔壁的人 */}
+              {(!spinning && winner) || pointerName || '—'}
+            </div>
+          )}
+
           <div className="relative" style={{ width: WHEEL_SIZE, height: WHEEL_SIZE }}>
             {/* outer ring */}
             <div className="absolute inset-0 rounded-full bg-sky-700 shadow-2xl" />
@@ -192,30 +263,48 @@ export default function LotteryPage() {
 
             {/* rotating wheel */}
             <div
+              ref={wheelRef}
               className="absolute rounded-full overflow-hidden shadow-inner"
               style={{
                 inset: RING_INSET,
                 background: wheelBackground,
-                transform: `rotate(${rotation}deg)`,
-                transition: spinning
-                  ? `transform ${SPIN_DURATION_MS}ms cubic-bezier(0.17, 0.67, 0.12, 0.99)`
-                  : 'none',
+                transform: `rotate(${rotationRef.current}deg)`,
               }}
             >
-              {pool.map((name, i) => {
-                const angle = i * segmentAngle + segmentAngle / 2;
-                return (
-                  <div
-                    key={`${name}-${i}`}
-                    className="absolute left-1/2 top-1/2 origin-left"
-                    style={{ transform: `rotate(${angle}deg) translateX(100px)` }}
-                  >
-                    <span className="-translate-x-1/2 -translate-y-1/2 absolute bg-white text-sky-700 text-xs font-bold px-2 py-1 rounded-full shadow whitespace-nowrap">
-                      {name}
-                    </span>
-                  </div>
-                );
-              })}
+              {labelMode !== 'ticker' &&
+                pool.map((name, i) => {
+                  // 角度從正上方順時針算；CSS rotate(0) 是朝右，所以要減 90 度
+                  const angle = i * segmentAngle + segmentAngle / 2 - 90;
+                  if (labelMode === 'pill') {
+                    return (
+                      <div
+                        key={`${name}-${i}`}
+                        className="absolute left-1/2 top-1/2 origin-left"
+                        style={{ transform: `rotate(${angle}deg) translateX(100px)` }}
+                      >
+                        <span className="-translate-x-1/2 -translate-y-1/2 absolute bg-white text-sky-700 text-xs font-bold px-2 py-1 rounded-full shadow whitespace-nowrap max-w-24 truncate">
+                          {name}
+                        </span>
+                      </div>
+                    );
+                  }
+                  const outer = WHEEL_SIZE / 2 - RING_INSET - 8;
+                  const inner = HUB_RADIUS + 10;
+                  return (
+                    <div
+                      key={`${name}-${i}`}
+                      className="absolute left-1/2 top-1/2 origin-left"
+                      style={{ transform: `rotate(${angle}deg)` }}
+                    >
+                      <span
+                        className="absolute -translate-y-1/2 text-right text-sky-900 text-[11px] font-semibold leading-none whitespace-nowrap overflow-hidden text-ellipsis"
+                        style={{ left: inner, width: outer - inner }}
+                      >
+                        {name}
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
 
             {/* pointer (static) */}
